@@ -86,7 +86,26 @@ function SetupGate() {
   return <PublicApp />;
 }
 
-function PlacementAd({ ad }: { ad?: { enabled: boolean; client: string; slot: string; placement: string } }) { useEffect(() => { if (!ad?.enabled || !ad.client || !ad.slot) return; const existing = document.querySelector('script[data-scriptstore-ads]'); if (!existing) { const script = document.createElement("script"); script.async = true; script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"; script.dataset.scriptstoreAds = "true"; document.head.appendChild(script); } }, [ad]); if (!ad?.enabled || !ad.client || !ad.slot) return null; return <div className="category-ad" aria-label="Iklan"><ins className="adsbygoogle" style={{ display: "block" }} data-ad-client={ad.client} data-ad-slot={ad.slot} data-ad-format="auto" data-full-width-responsive="true" /></div>; }
+function PlacementAd({ ad }: { ad?: { enabled: boolean; client: string; slot: string; placement: string } }) {
+  useEffect(() => {
+    if (!ad?.enabled || !ad.client || !ad.slot) return;
+    const pushAd = () => {
+      const win = window as Window & { adsbygoogle?: unknown[] };
+      win.adsbygoogle = win.adsbygoogle || [];
+      win.adsbygoogle.push({});
+    };
+    const existing = document.querySelector('script[data-scriptstore-ads]');
+    if (existing) { pushAd(); return; }
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js";
+    script.dataset.scriptstoreAds = "true";
+    script.addEventListener("load", pushAd, { once: true });
+    document.head.appendChild(script);
+  }, [ad?.enabled, ad?.client, ad?.slot]);
+  if (!ad?.enabled || !ad.client || !ad.slot) return null;
+  return <div className="category-ad" aria-label="Iklan"><ins className="adsbygoogle" style={{ display: "block" }} data-ad-client={ad.client} data-ad-slot={ad.slot} data-ad-format="auto" data-full-width-responsive="true" /></div>;
+}
 
 function PublicApp() {
   if (window.location.pathname.startsWith("/dashboard")) return <RoleDashboard />;
@@ -97,7 +116,29 @@ function PublicApp() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [copied, setCopied] = useState(false);
   const site = trpc.site.config.useQuery();
-  useEffect(() => { const title = site.data?.seoTitle || "ScriptStore · Script premium siap pakai"; const description = site.data?.seoDescription || "Script web premium siap pakai untuk bisnis digital."; document.title = title; const favicon = site.data?.branding?.faviconUrl; if (favicon) { let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]'); if (!icon) { icon = document.createElement("link"); icon.rel = "icon"; document.head.appendChild(icon); } icon.href = favicon; } let meta = document.querySelector('meta[name="description"]'); if (!meta) { meta = document.createElement("meta"); meta.setAttribute("name", "description"); document.head.appendChild(meta); } meta.setAttribute("content", description); }, [site.data?.seoTitle, site.data?.seoDescription]);
+  useEffect(() => {
+    const title = site.data?.seoTitle || "ScriptStore · Marketplace script premium siap pakai";
+    const description = site.data?.seoDescription || "Temukan script web premium untuk toko online, provider, landing page, dan bisnis digital. Siap dikustomisasi dan dipublish.";
+    document.title = title;
+    const setMeta = (selector: string, attribute: string, value: string, content: string) => {
+      let element = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!element) { element = document.createElement("meta"); element.setAttribute(attribute, value); document.head.appendChild(element); }
+      element.setAttribute("content", content);
+    };
+    setMeta('meta[name="description"]', "name", "description", description);
+    setMeta('meta[property="og:title"]', "property", "og:title", title);
+    setMeta('meta[property="og:description"]', "property", "og:description", description);
+    setMeta('meta[property="og:type"]', "property", "og:type", "website");
+    setMeta('meta[property="og:url"]', "property", "og:url", window.location.origin + window.location.pathname);
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement("link"); canonical.rel = "canonical"; document.head.appendChild(canonical); }
+    canonical.href = window.location.origin + window.location.pathname;
+    let schema = document.getElementById("scriptstore-schema") as HTMLScriptElement | null;
+    if (!schema) { schema = document.createElement("script"); schema.id = "scriptstore-schema"; schema.type = "application/ld+json"; document.head.appendChild(schema); }
+    schema.textContent = JSON.stringify({ "@context": "https://schema.org", "@type": "WebSite", name: "ScriptStore", url: window.location.origin, description });
+    const faviconUrl = site.data?.branding?.faviconUrl;
+    if (faviconUrl) { let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]'); if (!icon) { icon = document.createElement("link"); icon.rel = "icon"; document.head.appendChild(icon); } icon.href = faviconUrl; }
+  }, [site.data?.seoTitle, site.data?.seoDescription, site.data?.branding?.faviconUrl]);
 
   const visibleProducts = useMemo(
     () => products.filter((product) => {

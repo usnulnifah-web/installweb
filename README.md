@@ -98,6 +98,12 @@ Installer **tidak membuat akun admin**. Setelah website dibuka, jika database be
 
 Admin dapat menyalakan atau mematikan login Google dari **Dashboard → Pengaturan toko → Login dengan Google**. Saat dimatikan, tombol Google disembunyikan dan callback OAuth ditolak. Saklar aktif secara default setelah migrasi.
 
+## Google Ads dan SEO
+
+Google Ads/AdSense dapat diatur admin dari **Dashboard → Pengaturan toko → Google Ads**. Isi Publisher ID dengan format `ca-pub-...`, Ad Slot, dan posisi iklan, lalu centang **Aktif** dan simpan. Script AdSense hanya dimuat ketika iklan aktif dan Publisher ID serta Ad Slot terisi; jika salah satu kosong, unit iklan tidak dirender. Setelah akun AdSense disetujui, pertimbangkan menambahkan `ads.txt` sesuai instruksi Google pada domain utama.
+
+SEO dasar tersedia melalui menu **SEO toko**, yang mengatur judul dan deskripsi halaman. Aplikasi juga membuat metadata description, Open Graph, canonical URL, dan JSON-LD WebSite pada halaman publik. Gunakan judul yang spesifik, deskripsi ringkas, domain HTTPS, serta pastikan halaman publik dapat diakses tanpa login. Dashboard dan halaman login tidak ditujukan untuk pengindeksan mesin pencari.
+
 ## Fitur keamanan
 
 Script hasil pembeli dapat di-minify dan di-obfuscate. Pengaturan ini hanya dapat diubah admin dari **Dashboard → Pengaturan admin**. Upload gambar dibatasi ke JPG, PNG, dan WebP. API key tidak dikirim ke script pembeli.
