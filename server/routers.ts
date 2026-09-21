@@ -209,12 +209,13 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) return { profile: ctx.user, products: [], orders: [], ownedProducts: [], transactions: [], adminFee: 5000 };
       const profile = (await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0] ?? ctx.user;
-      const published = await db.select({ id: products.id, sellerId: products.sellerId, name: products.name, description: products.description, category: products.category, price: products.price, scriptType: products.scriptType, saleMode: products.saleMode, subscriptionDays: products.subscriptionDays, thumbnailUrl: products.thumbnailUrl, publicScript: products.publicScript, apiPath: products.apiPath, status: products.status, isActive: products.isActive, createdAt: products.createdAt, updatedAt: products.updatedAt }).from(products).where(and(eq(products.status, "published"), eq(products.isActive, 1))).orderBy(desc(products.createdAt));
+      const publishedRows = await db.select({ id: products.id, sellerId: products.sellerId, name: products.name, description: products.description, category: products.category, price: products.price, scriptType: products.scriptType, saleMode: products.saleMode, subscriptionDays: products.subscriptionDays, thumbnailUrl: products.thumbnailUrl, publicScript: products.publicScript, apiPath: products.apiPath, status: products.status, isActive: products.isActive, createdAt: products.createdAt, updatedAt: products.updatedAt }).from(products).where(and(eq(products.status, "published"), eq(products.isActive, 1))).orderBy(desc(products.createdAt));
+      const published = publishedRows.map((product) => ({ ...product, thumbnailUrl: product.thumbnailUrl || extractProductThumbnail(product.publicScript || "") }));
       const myOrders = await db.select().from(orders).where(eq(orders.buyerId, ctx.user.id)).orderBy(desc(orders.createdAt));
       const ownedIds = myOrders.filter((item) => item.status === "paid" || item.status === "delivered").map((item) => item.productId);
       const ownedRows = ownedIds.length ? await db.select().from(products).where(inArray(products.id, ownedIds)) : [];
       const now = Date.now();
-      const ownedProducts = ownedRows.map((product) => ({ ...product, accessActive: product.isActive === 1 && myOrders.some((order) => order.productId === product.id && (order.expiresAt === null || (order.expiresAt && order.expiresAt.getTime() > now))) }));
+      const ownedProducts = ownedRows.map((product) => ({ ...product, thumbnailUrl: product.thumbnailUrl || extractProductThumbnail(product.publicScript || ""), accessActive: product.isActive === 1 && myOrders.some((order) => order.productId === product.id && (order.expiresAt === null || (order.expiresAt && order.expiresAt.getTime() > now))) }));
       const myTransactions = await db.select().from(transactions).where(eq(transactions.userId, ctx.user.id)).orderBy(desc(transactions.createdAt));
       return { profile, products: published, orders: myOrders, ownedProducts, transactions: myTransactions, adminFee: await getAdminFee(db) };
     }),
