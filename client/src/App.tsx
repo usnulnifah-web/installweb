@@ -96,7 +96,7 @@ function PublicApp() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [copied, setCopied] = useState(false);
   const site = trpc.site.config.useQuery();
-  useEffect(() => { const title = site.data?.seoTitle || "ScriptStore · Script premium siap pakai"; const description = site.data?.seoDescription || "Script web premium siap pakai untuk bisnis digital."; document.title = title; let meta = document.querySelector('meta[name="description"]'); if (!meta) { meta = document.createElement("meta"); meta.setAttribute("name", "description"); document.head.appendChild(meta); } meta.setAttribute("content", description); }, [site.data?.seoTitle, site.data?.seoDescription]);
+  useEffect(() => { const title = site.data?.seoTitle || "ScriptStore · Script premium siap pakai"; const description = site.data?.seoDescription || "Script web premium siap pakai untuk bisnis digital."; document.title = title; const favicon = site.data?.branding?.faviconUrl; if (favicon) { let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]'); if (!icon) { icon = document.createElement("link"); icon.rel = "icon"; document.head.appendChild(icon); } icon.href = favicon; } let meta = document.querySelector('meta[name="description"]'); if (!meta) { meta = document.createElement("meta"); meta.setAttribute("name", "description"); document.head.appendChild(meta); } meta.setAttribute("content", description); }, [site.data?.seoTitle, site.data?.seoDescription]);
 
   const visibleProducts = useMemo(
     () => products.filter((product) => {
