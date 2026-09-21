@@ -13,7 +13,7 @@ ALTER TABLE `products` ADD `thumbnailUrl` varchar(1000);--> statement-breakpoint
 ALTER TABLE `settings` ADD `obfuscationEnabled` int DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE `settings` ADD `resetEmailEnabled` int DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE `settings` ADD `resetSecurityEnabled` int DEFAULT 1 NOT NULL;--> statement-breakpoint
-ALTER TABLE `settings` ADD `googleLoginEnabled` int DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE `settings` ADD `googleLoginEnabled` int DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE `settings` ADD `assetDomain` varchar(255);--> statement-breakpoint
 ALTER TABLE `settings` ADD `seoTitle` varchar(160);--> statement-breakpoint
 ALTER TABLE `settings` ADD `seoDescription` text;--> statement-breakpoint

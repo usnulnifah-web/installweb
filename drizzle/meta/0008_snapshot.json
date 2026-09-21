@@ -409,7 +409,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 0
+          "default": 1
         },
         "assetDomain": {
           "name": "assetDomain",
