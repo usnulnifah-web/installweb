@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import LocalAuthPanel from "./components/LocalAuthPanel";
 import {
   ArrowUpRight,
   Check,
@@ -65,6 +65,7 @@ const products: Product[] = [
 const categories = ["Semua", "Toko Online", "Provider", "Landing Page"];
 
 function App() {
+  if (window.location.pathname.startsWith("/reset-password")) return <LocalAuthPanel />;
   return <SetupGate />;
 }
 
@@ -81,7 +82,7 @@ function SetupGate() {
 
   if (setup.isLoading || auth.loading) return <div className="dash-loading"><span className="loading-orb" /> Menyiapkan website...</div>;
   if (setup.data && !setup.data.databaseReady) return <section className="dash-login"><div className="dash-eyebrow">Setup diperlukan</div><h1>Database belum siap.</h1><p>Isi DATABASE_URL di file .env lalu jalankan migrasi sebelum membuka website.</p></section>;
-  if (!setup.data?.hasAdmin) return <section className="dash-login"><div className="dash-login-mark"><Code2 size={28} /></div><div className="dash-eyebrow">Setup pertama kali</div><h1>Buat akun admin<br /><em>untuk membuka website.</em></h1><p>Semua halaman dikunci sampai admin pertama berhasil dibuat. Masuk dengan akun Anda untuk mengaktifkan akses website.</p>{auth.user ? <><p>Akun aktif: <strong>{auth.user.name || auth.user.email || "Pengguna"}</strong></p><button className="dash-primary" onClick={() => claim.mutate()} disabled={claim.isPending}>{claim.isPending ? "Membuat admin..." : "Buat akun admin"}</button></> : <button className="dash-primary" onClick={() => startLogin()}>Masuk untuk membuat admin</button>}<small>{claim.error?.message || "Setelah admin dibuat, layar setup ini otomatis dinonaktifkan."}</small></section>;
+  if (!setup.data?.hasAdmin) return auth.user ? <section className="dash-login"><div className="dash-login-mark"><Code2 size={28} /></div><div className="dash-eyebrow">Setup pertama kali</div><h1>Aktifkan akun admin<br /><em>untuk membuka website.</em></h1><p>Akun lokal Anda siap digunakan. Jadikan akun ini admin pertama.</p><p>Akun aktif: <strong>{auth.user.name || auth.user.email || "Pengguna"}</strong></p><button className="dash-primary" onClick={() => claim.mutate()} disabled={claim.isPending}>{claim.isPending ? "Membuat admin..." : "Buat akun admin"}</button><small>{claim.error?.message || "Setelah admin dibuat, layar setup ini otomatis dinonaktifkan."}</small></section> : <LocalAuthPanel firstAdmin />;
   return <PublicApp />;
 }
 

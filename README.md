@@ -41,11 +41,12 @@ Isi minimal:
 ```env
 DATABASE_URL=mysql://USER:PASSWORD@HOST:3306/DATABASE
 JWT_SECRET=ganti-dengan-secret-acak-yang-panjang
-VITE_APP_ID=isi-app-id-manus
-VITE_OAUTH_PORTAL_URL=https://oauth.manus.im
-OAUTH_SERVER_URL=https://api.manus.im
-BUILT_IN_FORGE_API_URL=isi-url-forge
-BUILT_IN_FORGE_API_KEY=isi-api-key-forge
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=alamat-gmail-atau-workspace
+SMTP_PASSWORD=app-password-google
+SMTP_FROM=alamat-gmail-atau-workspace
 ```
 
 Jalankan migrasi dan aplikasi:
@@ -61,6 +62,20 @@ Untuk development:
 ```bash
 pnpm dev
 ```
+
+## Login lokal dan lupa password
+
+Aplikasi menggunakan username dan password lokal. Pendaftaran meminta username, email, password minimal 15 karakter, serta pertanyaan dan jawaban keamanan. Jawaban keamanan di-hash dan tidak disimpan dalam teks biasa.
+
+Lupa password menggunakan token acak satu kali yang berlaku 20 menit dan dikirim melalui SMTP. Pesan API dibuat seragam agar tidak membocorkan apakah sebuah akun terdaftar. Untuk Gmail, aktifkan 2-Step Verification lalu buat Google App Password. Jangan commit `SMTP_PASSWORD` atau file `.env` ke repositori.
+
+Jalankan migrasi setelah memperbarui kode:
+
+```bash
+pnpm db:push
+```
+
+Login OAuth Manus tidak lagi digunakan oleh alur aplikasi.
 
 ## Setup admin pertama
 

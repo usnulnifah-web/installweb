@@ -11,30 +11,9 @@ export const ENV = {
 
 export function assertProductionEnv() {
   if (!ENV.isProduction) return;
-
   const missing: string[] = [];
-  if (!ENV.appId) missing.push("VITE_APP_ID");
-  if (!ENV.oAuthServerUrl) missing.push("OAUTH_SERVER_URL");
+  if (!ENV.databaseUrl) missing.push("DATABASE_URL");
   if (!ENV.cookieSecret) missing.push("JWT_SECRET");
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing required production environment variables: ${missing.join(", ")}`
-    );
-  }
-
-  if (ENV.cookieSecret.length < 32) {
-    throw new Error("JWT_SECRET must be at least 32 characters in production");
-  }
-
-  let oauthUrl: URL;
-  try {
-    oauthUrl = new URL(ENV.oAuthServerUrl);
-  } catch {
-    throw new Error("OAUTH_SERVER_URL must be a valid URL in production");
-  }
-
-  if (oauthUrl.protocol !== "https:") {
-    throw new Error("OAUTH_SERVER_URL must use HTTPS in production");
-  }
+  if (missing.length > 0) throw new Error(`Missing required production environment variables: ${missing.join(", ")}`);
+  if (ENV.cookieSecret.length < 32) throw new Error("JWT_SECRET must be at least 32 characters in production");
 }

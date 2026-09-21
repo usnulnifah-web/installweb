@@ -1,14 +1,13 @@
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
 import { orders, productCustomizations, products, settings, transactions, users } from "../drizzle/schema";
 import { getDb, getOrdersBySeller, getProductsBySeller, getPublishedProducts } from "./db";
 import { storagePut } from "./storage";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import JavaScriptObfuscator from "javascript-obfuscator";
+import { clearSession, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, resetWithSecurityQuestion, safeUser, setSession } from "./_core/localAuth";
 
 const roleProcedure = (role: "admin" | "seller" | "buyer") => protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== role) throw new TRPCError({ code: "FORBIDDEN", message: `Akses khusus ${role}.` });
@@ -157,10 +156,36 @@ export const appRouter = router({
     }),
   }),
   auth: router({
-    me: publicProcedure.query(({ ctx }) => ctx.user),
+    me: publicProcedure.query(({ ctx }) => safeUser(ctx.user)),
+    login: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+      try {
+        const user = await loginLocalUser(input.username, input.password);
+        await setSession(ctx.res, ctx.req, user);
+        return safeUser(user);
+      } catch (error) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: error instanceof Error ? error.message : "Login gagal." });
+      }
+    }),
+    register: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(15), name: z.string().min(2).max(120), email: z.string().email(), securityQuestion: z.string().min(8).max(255), securityAnswer: z.string().min(2).max(255) })).mutation(async ({ ctx, input }) => {
+      try {
+        if ((input.securityQuestion && !input.securityAnswer) || (!input.securityQuestion && input.securityAnswer)) throw new Error("Pertanyaan dan jawaban keamanan harus diisi bersama.");
+        const user = await registerLocalUser(input);
+        if (!user) throw new Error("Akun gagal dibuat.");
+        await setSession(ctx.res, ctx.req, user);
+        return safeUser(user);
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Pendaftaran gagal." });
+      }
+    }),
+    forgotPassword: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320) })).mutation(async ({ ctx, input }) => {
+      try { const db = await getDb(); const row = db ? (await db.select().from(settings).limit(1))[0] : undefined; if (row?.resetEmailEnabled !== 0) await requestPasswordReset(input.identifier, `${ctx.req.protocol}://${ctx.req.get("host")}`); } catch (error) { console.error("[Auth] Reset email failed", error); }
+      return { success: true, message: "Jika akun ditemukan, tautan reset akan dikirim ke email terdaftar." };
+    }),
+    securityQuestion: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320) })).query(async ({ input }) => { const key = input.identifier.trim().toLowerCase(); const user = key.includes("@") ? await getDb().then((db) => db ? db.select({ securityQuestion: users.securityQuestion }).from(users).where(eq(users.email, key)).limit(1) : []) : await getDb().then((db) => db ? db.select({ securityQuestion: users.securityQuestion }).from(users).where(eq(users.username, key)).limit(1) : []); return user[0]?.securityQuestion || null; }),
+    resetPassword: publicProcedure.input(z.object({ token: z.string().min(20), password: z.string().min(15) })).mutation(async ({ input }) => { await resetPassword(input.token, input.password); return { success: true }; }),
+    resetWithSecurityQuestion: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320), answer: z.string().min(2).max(255), password: z.string().min(15) })).mutation(async ({ input }) => { const db = await getDb(); const row = db ? (await db.select().from(settings).limit(1))[0] : undefined; if (row?.resetSecurityEnabled === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Metode pertanyaan keamanan dinonaktifkan admin." }); await resetWithSecurityQuestion(input.identifier, input.answer, input.password); return { success: true }; }),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const options = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...options, maxAge: -1 });
+      clearSession(ctx.res, ctx.req);
       return { success: true } as const;
     }),
   }),
@@ -281,7 +306,7 @@ export const appRouter = router({
     }),
   }),
   admin: router({
-    summary: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const [u, p, o, pendingProducts] = await Promise.all([db.select({ count: count() }).from(users), db.select({ count: count() }).from(products), db.select({ count: count() }).from(orders), db.select().from(products).where(eq(products.status, "pending")).orderBy(desc(products.createdAt))]); const settingsRow = (await db.select().from(settings).limit(1))[0]; return { users: u[0]?.count ?? 0, products: p[0]?.count ?? 0, orders: o[0]?.count ?? 0, pendingProducts, adminFee: await getAdminFee(db), obfuscationEnabled: await getObfuscationEnabled(db), assetDomain: await getAssetDomain(db), seoTitle: settingsRow?.seoTitle || "", seoDescription: settingsRow?.seoDescription || "", branding: { logoUrl: settingsRow?.logoUrl || "", faviconUrl: settingsRow?.faviconUrl || "" }, ads: { enabled: settingsRow?.adsEnabled === 1, client: settingsRow?.adsClient || "", slot: settingsRow?.adsSlot || "", placement: settingsRow?.adsPlacement || "top" } }; }),
+    summary: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const [u, p, o, pendingProducts] = await Promise.all([db.select({ count: count() }).from(users), db.select({ count: count() }).from(products), db.select({ count: count() }).from(orders), db.select().from(products).where(eq(products.status, "pending")).orderBy(desc(products.createdAt))]); const settingsRow = (await db.select().from(settings).limit(1))[0]; return { users: u[0]?.count ?? 0, products: p[0]?.count ?? 0, orders: o[0]?.count ?? 0, pendingProducts, adminFee: await getAdminFee(db), obfuscationEnabled: await getObfuscationEnabled(db), assetDomain: await getAssetDomain(db), seoTitle: settingsRow?.seoTitle || "", seoDescription: settingsRow?.seoDescription || "", branding: { logoUrl: settingsRow?.logoUrl || "", faviconUrl: settingsRow?.faviconUrl || "" }, ads: { enabled: settingsRow?.adsEnabled === 1, client: settingsRow?.adsClient || "", slot: settingsRow?.adsSlot || "", placement: settingsRow?.adsPlacement || "top" }, recovery: { emailEnabled: settingsRow?.resetEmailEnabled !== 0, securityEnabled: settingsRow?.resetSecurityEnabled !== 0 } }; }),
     users: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); return db.select({ id: users.id, name: users.name, email: users.email, role: users.role, balance: users.balance, isSuspended: users.isSuspended, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt)); }),
     products: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); return db.select().from(products).orderBy(desc(products.createdAt)); }),
     updateUserRole: adminProcedure.input(z.object({ userId: z.number().int(), role: z.enum(["admin", "seller", "buyer"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId)); return { success: true }; }),
@@ -292,6 +317,7 @@ export const appRouter = router({
     updateSeo: adminProcedure.input(z.object({ title: z.string().trim().max(160), description: z.string().trim().max(500) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; if (row) await db.update(settings).set({ seoTitle: input.title || null, seoDescription: input.description || null }).where(eq(settings.id, row.id)); else await db.insert(settings).values({ seoTitle: input.title || null, seoDescription: input.description || null }); return { success: true }; }),
     updateBranding: adminProcedure.input(z.object({ logoUrl: z.string().trim().max(1000), faviconUrl: z.string().trim().max(1000) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); for (const [key, value] of Object.entries(input)) { if (value && !/^(https:\/\/|\/manus-storage\/)/i.test(value)) throw new TRPCError({ code: "BAD_REQUEST", message: "Logo dan favicon harus URL HTTPS atau storage internal." }); } const row = (await db.select().from(settings).limit(1))[0]; const values = { logoUrl: input.logoUrl || null, faviconUrl: input.faviconUrl || null }; if (row) await db.update(settings).set(values).where(eq(settings.id, row.id)); else await db.insert(settings).values(values); return { success: true }; }),
     updateAds: adminProcedure.input(z.object({ enabled: z.boolean(), client: z.string().trim().max(120), slot: z.string().trim().max(120), placement: z.enum(["top", "middle", "bottom"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; const values = { adsEnabled: input.enabled ? 1 : 0, adsClient: input.client || null, adsSlot: input.slot || null, adsPlacement: input.placement }; if (row) await db.update(settings).set(values).where(eq(settings.id, row.id)); else await db.insert(settings).values(values); return { success: true }; }),
+    updateRecoveryMethods: adminProcedure.input(z.object({ emailEnabled: z.boolean(), securityEnabled: z.boolean() })).mutation(async ({ input }) => { if (!input.emailEnabled && !input.securityEnabled) throw new TRPCError({ code: "BAD_REQUEST", message: "Minimal satu metode pemulihan harus aktif." }); const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; const values = { resetEmailEnabled: input.emailEnabled ? 1 : 0, resetSecurityEnabled: input.securityEnabled ? 1 : 0 }; if (row) await db.update(settings).set(values).where(eq(settings.id, row.id)); else await db.insert(settings).values(values); return { success: true }; }),
     updateProductStatus: adminProcedure.input(z.object({ productId: z.number().int(), status: z.enum(["published", "rejected", "pending", "blocked"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ status: input.status }).where(eq(products.id, input.productId)); return { success: true }; }),
     updateProduct: adminProcedure.input(z.object({ productId: z.number().int(), name: z.string().min(2).optional(), description: z.string().min(2).optional(), price: z.number().int().positive().optional(), apiPath: z.string().max(255).optional(), saleMode: z.enum(["one_time", "subscription"]).optional(), subscriptionDays: z.number().int().positive().max(3650).optional() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const { productId, ...changes } = input; await db.update(products).set(changes).where(eq(products.id, productId)); return { success: true }; }),
     toggleProduct: adminProcedure.input(z.object({ productId: z.number().int(), active: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ isActive: input.active ? 1 : 0 }).where(eq(products.id, input.productId)); return { success: true }; }),
