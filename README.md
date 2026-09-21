@@ -75,11 +75,11 @@ Jalankan migrasi setelah memperbarui kode:
 pnpm db:push
 ```
 
-Login OAuth Manus tidak lagi digunakan oleh alur aplikasi.
+Login OAuth Google tidak lagi digunakan oleh alur aplikasi.
 
 ## Setup admin pertama
 
-Installer **tidak membuat akun admin**. Setelah website dibuka, jika database belum memiliki admin, seluruh halaman akan menampilkan **Buat akun admin pertama**. Login menggunakan akun Manus, klik **Buat akun admin**, lalu gerbang setup otomatis mati.
+Installer **tidak membuat akun admin**. Setelah website dibuka, jika database belum memiliki admin, seluruh halaman akan menampilkan **Buat akun admin pertama**. Login menggunakan akun Google, klik **Buat akun admin**, lalu gerbang setup otomatis mati.
 
 ## Fitur keamanan
 
