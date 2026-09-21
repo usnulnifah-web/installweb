@@ -52,3 +52,4 @@ log "Memvalidasi TypeScript dan build..."
 pnpm check
 pnpm build
 log "Selesai. Jalankan: cd $APP_DIR && pnpm dev"
+log "Saat website pertama dibuka, semua halaman akan mengarah ke setup Buat akun admin pertama."

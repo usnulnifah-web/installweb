@@ -25,6 +25,11 @@ async function getAdminFee(db: NonNullable<Awaited<ReturnType<typeof getDb>>>) {
   return 5000;
 }
 
+async function getObfuscationEnabled(db: NonNullable<Awaited<ReturnType<typeof getDb>>>) {
+  const row = (await db.select().from(settings).limit(1))[0];
+  return row ? row.obfuscationEnabled === 1 : true;
+}
+
 export function detectTemplateTokens(script: string) {
   return Array.from(new Set(Array.from(script.matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g), (match) => match[1])));
 }
@@ -71,7 +76,8 @@ export function renderTemplate(script: string, config: Record<string, string>) {
 }
 
 /** Protects generated inline JavaScript while keeping HTML/CSS and image URLs compatible. */
-export function protectGeneratedScript(script: string) {
+export function protectGeneratedScript(script: string, enabled = true) {
+  if (!enabled) return script;
   return script
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (_full, open: string, code: string, close: string) => {
@@ -104,6 +110,22 @@ export function isOrderAccessActive(status: string, expiresAt: Date | null, now 
 
 export const appRouter = router({
   system: systemRouter,
+  setup: router({
+    status: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return { hasAdmin: false, databaseReady: false };
+      const admins = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin")).limit(1);
+      return { hasAdmin: admins.length > 0, databaseReady: true };
+    }),
+    claimFirstAdmin: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database belum siap." });
+      const admins = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin")).limit(1);
+      if (admins.length) throw new TRPCError({ code: "FORBIDDEN", message: "Admin pertama sudah dibuat." });
+      await db.update(users).set({ role: "admin", isSuspended: 0 }).where(eq(users.id, ctx.user.id));
+      return { success: true };
+    }),
+  }),
   auth: router({
     me: publicProcedure.query(({ ctx }) => ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -184,7 +206,7 @@ export const appRouter = router({
       const config = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
       const rendered = renderTemplate(source, config);
-      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, script: protectGeneratedScript(rendered) };
+      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
     }),
     saveTemplate: buyerProcedure.input(z.object({ productId: z.number().int(), config: z.record(z.string(), z.string()) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -225,12 +247,13 @@ export const appRouter = router({
     }),
   }),
   admin: router({
-    summary: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const [u, p, o, pendingProducts] = await Promise.all([db.select({ count: count() }).from(users), db.select({ count: count() }).from(products), db.select({ count: count() }).from(orders), db.select().from(products).where(eq(products.status, "pending")).orderBy(desc(products.createdAt))]); return { users: u[0]?.count ?? 0, products: p[0]?.count ?? 0, orders: o[0]?.count ?? 0, pendingProducts, adminFee: await getAdminFee(db) }; }),
+    summary: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const [u, p, o, pendingProducts] = await Promise.all([db.select({ count: count() }).from(users), db.select({ count: count() }).from(products), db.select({ count: count() }).from(orders), db.select().from(products).where(eq(products.status, "pending")).orderBy(desc(products.createdAt))]); return { users: u[0]?.count ?? 0, products: p[0]?.count ?? 0, orders: o[0]?.count ?? 0, pendingProducts, adminFee: await getAdminFee(db), obfuscationEnabled: await getObfuscationEnabled(db) }; }),
     users: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); return db.select({ id: users.id, name: users.name, email: users.email, role: users.role, balance: users.balance, isSuspended: users.isSuspended, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt)); }),
     products: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); return db.select().from(products).orderBy(desc(products.createdAt)); }),
     updateUserRole: adminProcedure.input(z.object({ userId: z.number().int(), role: z.enum(["admin", "seller", "buyer"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId)); return { success: true }; }),
     updateUserSuspension: adminProcedure.input(z.object({ userId: z.number().int(), suspended: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(users).set({ isSuspended: input.suspended ? 1 : 0 }).where(eq(users.id, input.userId)); return { success: true }; }),
     updateAdminFee: adminProcedure.input(z.object({ amount: z.number().int().min(0) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; if (row) await db.update(settings).set({ adminFee: input.amount }).where(eq(settings.id, row.id)); else await db.insert(settings).values({ adminFee: input.amount }); return { success: true }; }),
+    updateObfuscation: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; if (row) await db.update(settings).set({ obfuscationEnabled: input.enabled ? 1 : 0 }).where(eq(settings.id, row.id)); else await db.insert(settings).values({ obfuscationEnabled: input.enabled ? 1 : 0 }); return { success: true }; }),
     updateProductStatus: adminProcedure.input(z.object({ productId: z.number().int(), status: z.enum(["published", "rejected", "pending", "blocked"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ status: input.status }).where(eq(products.id, input.productId)); return { success: true }; }),
     updateProduct: adminProcedure.input(z.object({ productId: z.number().int(), name: z.string().min(2).optional(), description: z.string().min(2).optional(), price: z.number().int().positive().optional(), apiPath: z.string().max(255).optional(), saleMode: z.enum(["one_time", "subscription"]).optional(), subscriptionDays: z.number().int().positive().max(3650).optional() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const { productId, ...changes } = input; await db.update(products).set(changes).where(eq(products.id, productId)); return { success: true }; }),
     toggleProduct: adminProcedure.input(z.object({ productId: z.number().int(), active: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ isActive: input.active ? 1 : 0 }).where(eq(products.id, input.productId)); return { success: true }; }),
