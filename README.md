@@ -4,6 +4,16 @@ Marketplace script dengan dashboard **admin, penjual, dan pembeli**, editor tamp
 
 Repositori ini privat: `https://github.com/usnulnifah-web/installweb`
 
+## Persyaratan hosting
+
+Aplikasi ini adalah aplikasi full-stack Node.js, bukan website HTML statis. Hosting yang dipilih harus mendukung **Node.js 20 atau lebih baru**, Terminal/SSH untuk menjalankan installer dan migrasi, serta proses Node.js yang dapat berjalan terus sebagai aplikasi production. Hosting juga memerlukan database **MySQL/MariaDB** yang dapat diakses melalui `DATABASE_URL`.
+
+Untuk login Google, gunakan domain dengan **HTTPS** dan tambahkan redirect URI `https://domain-anda.com/api/auth/google/callback` di Google Cloud Console. Isi `APP_BASE_URL`, `GOOGLE_CLIENT_ID`, dan `GOOGLE_CLIENT_SECRET` di `.env`. Untuk fitur lupa password melalui email, hosting harus mengizinkan koneksi SMTP keluar dan konfigurasi `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, serta `SMTP_FROM`.
+
+Pastikan hosting menyediakan penyimpanan yang dapat ditulis untuk kebutuhan upload/storage aplikasi, resource yang cukup untuk proses build, dan kemampuan menjalankan perintah `pnpm install`, `pnpm check`, `pnpm db:push`, `pnpm build`, serta `pnpm start`. Hosting yang hanya menyediakan FTP tanpa Terminal/SSH, Node.js, database, atau proses aplikasi persisten tidak cukup untuk menjalankan aplikasi ini secara lengkap. FTP hanya dapat dipakai untuk mengunggah file; instalasi dan migrasi tetap harus dijalankan melalui Terminal/SSH.
+
+Sebelum membeli hosting, tanyakan apakah tersedia **Node.js app manager** atau PM2/systemd, akses environment variables, database MySQL/MariaDB, SSL/HTTPS, dan konfigurasi domain/subdomain ke port aplikasi. Shared hosting PHP-only dan GitHub Pages tidak cocok untuk aplikasi ini.
+
 ## Autoinstall di hosting
 
 Karena repositori privat, hosting harus sudah memiliki akses GitHub melalui SSH key atau credential GitHub.
