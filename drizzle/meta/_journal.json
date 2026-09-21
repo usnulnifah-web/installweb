@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1789979357957,
+      "tag": "0000_colossal_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1789981426957,
+      "tag": "0001_damp_marauders",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1789981455878,
+      "tag": "0002_stormy_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1789981517721,
+      "tag": "0003_damp_shatterstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1789982361991,
+      "tag": "0004_deep_viper",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1789982823824,
+      "tag": "0005_melodic_storm",
+      "breakpoints": true
+    }
+  ]
+}
