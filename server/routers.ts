@@ -44,6 +44,16 @@ export function normalizeScriptTemplate(script: string) {
   });
 }
 
+/** Prepares raw seller code; unpublished products never expose unvalidated code. */
+export function prepareScriptTemplate(script: string) {
+  const normalized = normalizeScriptTemplate(script).trim();
+  if (!normalized) throw new Error("Script kosong.");
+  const openingTokens = (normalized.match(/\{\{/g) || []).length;
+  const closingTokens = (normalized.match(/\}\}/g) || []).length;
+  if (openingTokens !== closingTokens || /\{\{[^}]*$|^[^{]*\}\}/m.test(normalized)) throw new Error("Token template tidak lengkap.");
+  return normalized;
+}
+
 function safeTemplateConfig(config: Record<string, string>) {
   const clean: Record<string, string> = {};
   for (const [key, raw] of Object.entries(config)) {
@@ -107,7 +117,15 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (input.scriptType === "api" && !input.secretScript?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Script rahasia wajib diisi untuk produk API." });
-      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, publicScript: normalizeScriptTemplate(input.publicScript), secretScript: input.secretScript ? normalizeScriptTemplate(input.secretScript) : null, apiPath: input.apiPath || null, status: "pending" });
+      let publicScript: string;
+      let secretScript: string | null = null;
+      try {
+        publicScript = prepareScriptTemplate(input.publicScript);
+        secretScript = input.secretScript ? prepareScriptTemplate(input.secretScript) : null;
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Script belum berhasil diperbaiki: ${(error as Error).message}` });
+      }
+      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, publicScript, secretScript, apiPath: input.apiPath || null, status: "pending" });
       return { id: Number(result[0].insertId), status: "pending" as const };
     }),
     updateOrderStatus: sellerProcedure.input(z.object({ orderId: z.number().int(), status: z.enum(["paid", "delivered", "cancelled"]) })).mutation(async ({ ctx, input }) => {

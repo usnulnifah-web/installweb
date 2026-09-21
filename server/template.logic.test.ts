@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, renderTemplate } from "./routers";
+import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, renderTemplate } from "./routers";
 
 describe("script template helpers", () => {
   it("detects unique editable tokens in seller script", () => {
@@ -13,6 +13,11 @@ describe("script template helpers", () => {
   it("turns labelled raw banner and logo URLs into editable appearance fields", () => {
     const raw = '<img id="banner-utama" src="https://example.com/banner.jpg"><img class="logo" src="https://example.com/logo.png"><img src="https://example.com/icon.png">';
     expect(normalizeScriptTemplate(raw)).toBe('<img id="banner-utama" src="{{bannerUrl}}"><img class="logo" src="{{logoUrl}}"><img src="https://example.com/icon.png">');
+  });
+
+  it("rejects incomplete template tokens before publication", () => {
+    expect(() => prepareScriptTemplate('<h1>{{storeName</h1>')).toThrow("Token template tidak lengkap.");
+    expect(prepareScriptTemplate('<h1>{{storeName}}</h1>')).toBe('<h1>{{storeName}}</h1>');
   });
 
   it("sets subscription expiry exactly 30 days later", () => {
