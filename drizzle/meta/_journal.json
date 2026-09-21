@@ -57,6 +57,13 @@
       "when": 1790000001000,
       "tag": "0007_asset_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1790024165638,
+      "tag": "0008_chief_toad",
+      "breakpoints": true
     }
   ]
 }

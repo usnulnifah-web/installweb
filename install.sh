@@ -42,7 +42,7 @@ pnpm install
 if [ "${SKIP_DB:-0}" != "1" ]; then
   if grep -q '^DATABASE_URL=' .env 2>/dev/null && ! grep -q '^DATABASE_URL=$' .env; then
     log "Menjalankan sinkronisasi database..."
-    pnpm db:push || log "Database belum dapat disinkronkan; periksa DATABASE_URL di .env."
+    pnpm db:migrate || fail "Migrasi database gagal. Periksa DATABASE_URL, izin user MySQL, dan error SQL di atas; jangan lanjutkan menjalankan aplikasi sebelum migrasi berhasil."
   else
     log "DATABASE_URL belum diisi; melewati sinkronisasi database."
   fi

@@ -67,10 +67,12 @@ Di Google Cloud Console, aktifkan Google Identity, buat OAuth Client ID tipe Web
 Jalankan migrasi dan aplikasi:
 
 ```bash
-pnpm db:push
+pnpm db:migrate
 pnpm build
 NODE_ENV=production pnpm start
 ```
+
+`pnpm db:migrate` hanya menerapkan migration yang sudah ada di repository dan aman dipakai saat deploy. Jangan menjalankan `pnpm db:generate` di VPS. Jika schema berubah saat development, jalankan `pnpm db:generate`, review file SQL yang dihasilkan, commit file migration beserta `drizzle/meta`, lalu jalankan `pnpm db:migrate` di server.
 
 Untuk development:
 
@@ -87,7 +89,7 @@ Lupa password menggunakan token acak satu kali yang berlaku 20 menit dan dikirim
 Jalankan migrasi setelah memperbarui kode:
 
 ```bash
-pnpm db:push
+pnpm db:migrate
 ```
 
 Login dapat dilakukan dengan username/password lokal atau Google OAuth. Google OAuth memerlukan `APP_BASE_URL`, `GOOGLE_CLIENT_ID`, dan `GOOGLE_CLIENT_SECRET`.
