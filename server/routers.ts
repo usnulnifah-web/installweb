@@ -28,6 +28,22 @@ export function detectTemplateTokens(script: string) {
   return Array.from(new Set(Array.from(script.matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g), (match) => match[1])));
 }
 
+function appearanceKeyFromMarkup(markup: string) {
+  const marker = markup.match(/(?:data-scriptstore|id|class|alt)\s*=\s*["']([^"']+)["']/i)?.[1] || "";
+  const normalized = marker.toLowerCase();
+  if (/logo/.test(normalized)) return "logoUrl";
+  if (/banner|hero|cover/.test(normalized)) return "bannerUrl";
+  return null;
+}
+
+/** Turns clearly labelled raw image URLs into editable appearance tokens. */
+export function normalizeScriptTemplate(script: string) {
+  return script.replace(/<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi, (full, before: string, quote: string, _url: string, after: string) => {
+    const key = appearanceKeyFromMarkup(`${before} ${after}`);
+    return key ? `<img${before}src=${quote}{{${key}}}${quote}${after}>` : full;
+  });
+}
+
 function safeTemplateConfig(config: Record<string, string>) {
   const clean: Record<string, string> = {};
   for (const [key, raw] of Object.entries(config)) {
@@ -91,7 +107,7 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (input.scriptType === "api" && !input.secretScript?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Script rahasia wajib diisi untuk produk API." });
-      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, secretScript: input.secretScript || null, apiPath: input.apiPath || null, status: "pending" });
+      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, publicScript: normalizeScriptTemplate(input.publicScript), secretScript: input.secretScript ? normalizeScriptTemplate(input.secretScript) : null, apiPath: input.apiPath || null, status: "pending" });
       return { id: Number(result[0].insertId), status: "pending" as const };
     }),
     updateOrderStatus: sellerProcedure.input(z.object({ orderId: z.number().int(), status: z.enum(["paid", "delivered", "cancelled"]) })).mutation(async ({ ctx, input }) => {
@@ -121,7 +137,7 @@ export const appRouter = router({
       if (!order) throw new TRPCError({ code: "FORBIDDEN", message: "Masa aktif produk sudah habis atau belum dibeli." });
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.isActive, 1))).limit(1))[0]; if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk sedang dinonaktifkan admin." });
       const saved = (await db.select().from(productCustomizations).where(and(eq(productCustomizations.productId, input.productId), eq(productCustomizations.buyerId, ctx.user.id))).limit(1))[0];
-      const defaultConfig = { storeName: ctx.user.name || "Toko Saya", primaryColor: "#c7f36b", secondaryColor: "#101311", logoUrl: "", heroImage: "", apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
+      const defaultConfig = { storeName: ctx.user.name || "Toko Saya", primaryColor: "#c7f36b", secondaryColor: "#101311", logoUrl: "", bannerUrl: "", heroImage: "", apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
       const config = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
       return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, script: renderTemplate(source, config) };
