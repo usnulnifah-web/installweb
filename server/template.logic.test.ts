@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, protectGeneratedScript, renderTemplate } from "./routers";
+import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, protectGeneratedScript, renderTemplate, rewriteAssetUrl } from "./routers";
 
 describe("script template helpers", () => {
   it("detects unique editable tokens in seller script", () => {
@@ -26,6 +26,11 @@ describe("script template helpers", () => {
     expect(output).toContain("<script>");
     expect(output).toContain("</script>");
     expect(output).not.toContain('console.log(secretName)');
+  });
+
+  it("rewrites only internal storage assets to the configured domain", () => {
+    expect(rewriteAssetUrl("/manus-storage/templates/banner.png", "https://cdn.example.com")).toBe("https://cdn.example.com/manus-storage/templates/banner.png");
+    expect(rewriteAssetUrl("https://external.example/banner.png", "https://cdn.example.com")).toBe("https://external.example/banner.png");
   });
 
   it("sets subscription expiry exactly 30 days later", () => {

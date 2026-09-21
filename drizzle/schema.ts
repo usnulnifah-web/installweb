@@ -17,7 +17,7 @@ export const orders = mysqlTable("orders", {
 });
 
 export const transactions = mysqlTable("transactions", { id: int("id").autoincrement().primaryKey(), userId: int("userId").notNull(), orderId: int("orderId"), type: mysqlEnum("type", ["credit", "debit"]).notNull(), amount: int("amount").notNull(), description: varchar("description", { length: 255 }).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull() });
-export const settings = mysqlTable("settings", { id: int("id").autoincrement().primaryKey(), adminFee: int("adminFee").default(5000).notNull(), obfuscationEnabled: int("obfuscationEnabled").default(1).notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull() });
+export const settings = mysqlTable("settings", { id: int("id").autoincrement().primaryKey(), adminFee: int("adminFee").default(5000).notNull(), obfuscationEnabled: int("obfuscationEnabled").default(1).notNull(), assetDomain: varchar("assetDomain", { length: 255 }), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull() });
 export const productCustomizations = mysqlTable("productCustomizations", { id: int("id").autoincrement().primaryKey(), productId: int("productId").notNull(), buyerId: int("buyerId").notNull(), config: text("config").notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull() });
 
 export type User = typeof users.$inferSelect; export type InsertUser = typeof users.$inferInsert; export type Product = typeof products.$inferSelect; export type Order = typeof orders.$inferSelect; export type Transaction = typeof transactions.$inferSelect; export type ProductCustomization = typeof productCustomizations.$inferSelect;

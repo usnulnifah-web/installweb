@@ -3,9 +3,19 @@ import { ENV } from "./env";
 
 export function registerStorageProxy(app: Express) {
   app.get("/manus-storage/*", async (req, res) => {
-    const key = (req.params as Record<string, string>)[0];
+    let key = "";
+    try {
+      key = decodeURIComponent((req.params as Record<string, string>)[0] || "");
+    } catch {
+      res.status(400).send("Invalid storage key");
+      return;
+    }
     if (!key) {
       res.status(400).send("Missing storage key");
+      return;
+    }
+    if (key.includes("..") || key.startsWith("/") || key.includes("\\")) {
+      res.status(400).send("Invalid storage key");
       return;
     }
 
@@ -33,7 +43,7 @@ export function registerStorageProxy(app: Express) {
       }
 
       const { url } = (await forgeResp.json()) as { url: string };
-      if (!url) {
+      if (!url || !url.startsWith("https://")) {
         res.status(502).send("Empty signed URL from backend");
         return;
       }

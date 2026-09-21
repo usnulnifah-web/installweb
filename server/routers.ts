@@ -30,6 +30,11 @@ async function getObfuscationEnabled(db: NonNullable<Awaited<ReturnType<typeof g
   return row ? row.obfuscationEnabled === 1 : true;
 }
 
+async function getAssetDomain(db: NonNullable<Awaited<ReturnType<typeof getDb>>>) {
+  const row = (await db.select().from(settings).limit(1))[0];
+  return row?.assetDomain || "";
+}
+
 export function detectTemplateTokens(script: string) {
   return Array.from(new Set(Array.from(script.matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g), (match) => match[1])));
 }
@@ -71,8 +76,19 @@ function safeTemplateConfig(config: Record<string, string>) {
   return clean;
 }
 
+function parseSafeImageDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) throw new TRPCError({ code: "BAD_REQUEST", message: "Gunakan gambar JPG, PNG, atau WebP." });
+  return { contentType: match[1].toLowerCase(), encoded: match[2] };
+}
+
 export function renderTemplate(script: string, config: Record<string, string>) {
   return script.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_, key: string) => config[key] ?? "");
+}
+
+export function rewriteAssetUrl(url: string, assetDomain: string) {
+  if (!assetDomain || !url.startsWith("/manus-storage/")) return url;
+  return `${assetDomain}${url}`;
 }
 
 /** Protects generated inline JavaScript while keeping HTML/CSS and image URLs compatible. */
@@ -150,9 +166,8 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (input.dataUrl.length > 7_000_000) throw new TRPCError({ code: "BAD_REQUEST", message: "Foto maksimal 5MB." });
-      const [meta, encoded] = input.dataUrl.split(",");
-      const contentType = meta.match(/data:(.*?);/)?.[1] || "image/jpeg";
-      const stored = await storagePut(`profiles/${ctx.user.id}/${input.fileName}`, Buffer.from(encoded || "", "base64"), contentType);
+      const { contentType, encoded } = parseSafeImageDataUrl(input.dataUrl);
+      const stored = await storagePut(`profiles/${ctx.user.id}/${input.fileName}`, Buffer.from(encoded, "base64"), contentType);
       await db.update(users).set({ avatarUrl: stored.url }).where(eq(users.id, ctx.user.id));
       return { url: stored.url };
     }),
@@ -203,10 +218,12 @@ export const appRouter = router({
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.isActive, 1))).limit(1))[0]; if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk sedang dinonaktifkan admin." });
       const saved = (await db.select().from(productCustomizations).where(and(eq(productCustomizations.productId, input.productId), eq(productCustomizations.buyerId, ctx.user.id))).limit(1))[0];
       const defaultConfig = { storeName: ctx.user.name || "Toko Saya", primaryColor: "#c7f36b", secondaryColor: "#101311", logoUrl: "", bannerUrl: "", heroImage: "", apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
-      const config = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
+      const assetDomain = await getAssetDomain(db);
+      const rawConfig = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
+      const config = Object.fromEntries(Object.entries(rawConfig).map(([key, value]) => [key, /url|image|logo|banner|hero/i.test(key) ? rewriteAssetUrl(value, assetDomain) : value]));
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
       const rendered = renderTemplate(source, config);
-      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
+      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
     }),
     saveTemplate: buyerProcedure.input(z.object({ productId: z.number().int(), config: z.record(z.string(), z.string()) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -225,9 +242,10 @@ export const appRouter = router({
       const order = orderRows.find((item) => ["paid", "delivered"].includes(item.status) && (!item.expiresAt || item.expiresAt > new Date()));
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.isActive, 1))).limit(1))[0];
       if (!order || !product) throw new TRPCError({ code: "FORBIDDEN", message: "Akses produk sudah tidak aktif." });
-      const [meta, encoded] = input.dataUrl.split(","); const contentType = meta.match(/data:(.*?);/)?.[1] || "image/jpeg";
-      const stored = await storagePut(`templates/${ctx.user.id}/${input.productId}/${input.field}-${input.fileName}`, Buffer.from(encoded || "", "base64"), contentType);
-      return { field: input.field, url: stored.url };
+      const { contentType, encoded } = parseSafeImageDataUrl(input.dataUrl);
+      const stored = await storagePut(`templates/${ctx.user.id}/${input.productId}/${input.field}-${input.fileName}`, Buffer.from(encoded, "base64"), contentType);
+      const assetDomain = await getAssetDomain(db);
+      return { field: input.field, url: rewriteAssetUrl(stored.url, assetDomain) };
     }),
     createOrder: buyerProcedure.input(z.object({ productId: z.number().int() })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database belum tersedia." });
@@ -247,13 +265,14 @@ export const appRouter = router({
     }),
   }),
   admin: router({
-    summary: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const [u, p, o, pendingProducts] = await Promise.all([db.select({ count: count() }).from(users), db.select({ count: count() }).from(products), db.select({ count: count() }).from(orders), db.select().from(products).where(eq(products.status, "pending")).orderBy(desc(products.createdAt))]); return { users: u[0]?.count ?? 0, products: p[0]?.count ?? 0, orders: o[0]?.count ?? 0, pendingProducts, adminFee: await getAdminFee(db), obfuscationEnabled: await getObfuscationEnabled(db) }; }),
+    summary: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const [u, p, o, pendingProducts] = await Promise.all([db.select({ count: count() }).from(users), db.select({ count: count() }).from(products), db.select({ count: count() }).from(orders), db.select().from(products).where(eq(products.status, "pending")).orderBy(desc(products.createdAt))]); return { users: u[0]?.count ?? 0, products: p[0]?.count ?? 0, orders: o[0]?.count ?? 0, pendingProducts, adminFee: await getAdminFee(db), obfuscationEnabled: await getObfuscationEnabled(db), assetDomain: await getAssetDomain(db) }; }),
     users: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); return db.select({ id: users.id, name: users.name, email: users.email, role: users.role, balance: users.balance, isSuspended: users.isSuspended, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt)); }),
     products: adminProcedure.query(async () => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); return db.select().from(products).orderBy(desc(products.createdAt)); }),
     updateUserRole: adminProcedure.input(z.object({ userId: z.number().int(), role: z.enum(["admin", "seller", "buyer"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId)); return { success: true }; }),
     updateUserSuspension: adminProcedure.input(z.object({ userId: z.number().int(), suspended: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(users).set({ isSuspended: input.suspended ? 1 : 0 }).where(eq(users.id, input.userId)); return { success: true }; }),
     updateAdminFee: adminProcedure.input(z.object({ amount: z.number().int().min(0) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; if (row) await db.update(settings).set({ adminFee: input.amount }).where(eq(settings.id, row.id)); else await db.insert(settings).values({ adminFee: input.amount }); return { success: true }; }),
     updateObfuscation: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const row = (await db.select().from(settings).limit(1))[0]; if (row) await db.update(settings).set({ obfuscationEnabled: input.enabled ? 1 : 0 }).where(eq(settings.id, row.id)); else await db.insert(settings).values({ obfuscationEnabled: input.enabled ? 1 : 0 }); return { success: true }; }),
+    updateAssetDomain: adminProcedure.input(z.object({ domain: z.string().trim().max(255).refine((value) => { if (!value) return true; try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash; } catch { return false; } }, "Domain harus berupa URL HTTPS yang valid tanpa query atau kredensial.") })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const domain = input.domain.replace(/\/+$/, ""); const row = (await db.select().from(settings).limit(1))[0]; if (row) await db.update(settings).set({ assetDomain: domain || null }).where(eq(settings.id, row.id)); else await db.insert(settings).values({ assetDomain: domain || null }); return { success: true, domain }; }),
     updateProductStatus: adminProcedure.input(z.object({ productId: z.number().int(), status: z.enum(["published", "rejected", "pending", "blocked"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ status: input.status }).where(eq(products.id, input.productId)); return { success: true }; }),
     updateProduct: adminProcedure.input(z.object({ productId: z.number().int(), name: z.string().min(2).optional(), description: z.string().min(2).optional(), price: z.number().int().positive().optional(), apiPath: z.string().max(255).optional(), saleMode: z.enum(["one_time", "subscription"]).optional(), subscriptionDays: z.number().int().positive().max(3650).optional() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const { productId, ...changes } = input; await db.update(products).set(changes).where(eq(products.id, productId)); return { success: true }; }),
     toggleProduct: adminProcedure.input(z.object({ productId: z.number().int(), active: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ isActive: input.active ? 1 : 0 }).where(eq(products.id, input.productId)); return { success: true }; }),

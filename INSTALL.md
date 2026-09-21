@@ -56,4 +56,6 @@ Penjual dapat menempelkan token berikut ke script publik: `{{storeName}}`, `{{pr
 
 URL gambar mentah yang diberi penanda `id`, `class`, `alt`, atau `data-scriptstore` dengan kata `banner`, `hero`, `logo`, atau `cover` otomatis diubah menjadi field tampilan. Contoh: `<img id="banner-utama" src="https://contoh.com/banner.jpg">` dapat diganti pembeli dari dashboard. Script hasil pembeli dilindungi dengan minify dan obfuscation JavaScript; admin dapat mengaktifkan atau menonaktifkannya dari **Pengaturan admin**.
 
+Admin juga dapat mengisi **Domain asset gambar**, misalnya `https://cdn.tokoku.com`. Hanya URL asset internal `/manus-storage/...` yang akan memakai domain tersebut; URL gambar eksternal tidak diubah dan tidak diproxy agar aman dari SSRF.
+
 Produk dapat dijual sebagai **sekali beli** atau **langganan**. Langganan default aktif selama **30 hari**. Setelah lewat masa aktif, akses script/template otomatis ditolak sampai pembeli melakukan pembelian/perpanjangan yang baru. Admin dapat membaca, mengubah status, mengaktifkan, menonaktifkan, atau menghapus produk dan akun.
