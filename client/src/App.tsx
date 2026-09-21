@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -85,6 +85,8 @@ function SetupGate() {
   return <PublicApp />;
 }
 
+function PlacementAd({ ad }: { ad?: { enabled: boolean; client: string; slot: string; placement: string } }) { useEffect(() => { if (!ad?.enabled || !ad.client || !ad.slot) return; const existing = document.querySelector('script[data-scriptstore-ads]'); if (!existing) { const script = document.createElement("script"); script.async = true; script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"; script.dataset.scriptstoreAds = "true"; document.head.appendChild(script); } }, [ad]); if (!ad?.enabled || !ad.client || !ad.slot) return null; return <div className="category-ad" aria-label="Iklan"><ins className="adsbygoogle" style={{ display: "block" }} data-ad-client={ad.client} data-ad-slot={ad.slot} data-ad-format="auto" data-full-width-responsive="true" /></div>; }
+
 function PublicApp() {
   if (window.location.pathname.startsWith("/dashboard")) return <RoleDashboard />;
 
@@ -93,6 +95,8 @@ function PublicApp() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [copied, setCopied] = useState(false);
+  const site = trpc.site.config.useQuery();
+  useEffect(() => { const title = site.data?.seoTitle || "ScriptStore · Script premium siap pakai"; const description = site.data?.seoDescription || "Script web premium siap pakai untuk bisnis digital."; document.title = title; let meta = document.querySelector('meta[name="description"]'); if (!meta) { meta = document.createElement("meta"); meta.setAttribute("name", "description"); document.head.appendChild(meta); } meta.setAttribute("content", description); }, [site.data?.seoTitle, site.data?.seoDescription]);
 
   const visibleProducts = useMemo(
     () => products.filter((product) => {
@@ -161,8 +165,9 @@ function PublicApp() {
 
       <section className="catalog container" id="produk">
         <div className="section-heading"><div><div className="eyebrow">Katalog pilihan</div><h2>Mulai dari yang kamu <em>butuhkan.</em></h2></div><p>Script clean, responsive, dan mudah dikembangkan.<br />Pilih satu untuk mulai hari ini.</p></div>
-        <div className="catalog-tools"><div className="category-tabs">{categories.map((category) => <button key={category} className={activeCategory === category ? "active" : ""} onClick={() => setActiveCategory(category)}>{category}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari script..." /></label></div>
-        <div className="product-grid">{visibleProducts.map((product) => <article className={`product-card accent-${product.accent}`} key={product.name}><div className="product-visual"><div className="visual-glow" /><span className="product-badge">{product.badge || "HTML / CSS / JS"}</span><div className="visual-icon"><Globe2 size={30} /></div><span className="visual-code">&lt;/&gt;</span></div><div className="product-body"><div className="product-category">{product.category}</div><h3>{product.name}</h3><p>{product.description}</p><div className="tag-row">{product.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="product-footer"><div><span className="price">{product.price}</span>{product.oldPrice && <del>{product.oldPrice}</del>}</div><button className="buy-button" onClick={() => order(product.name)}>Beli script <ArrowUpRight size={16} /></button></div></div></article>)}</div>
+        <div className="catalog-tools"><div className="category-tabs">{categories.map((category) => <button key={category} className={activeCategory === category ? "active" : ""} onClick={() => setActiveCategory(category)}>{category}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari script..." /></label></div><PlacementAd ad={site.data?.ads} />
+        <div className="product-grid">{visibleProducts.map((product, index) => <>{site.data?.ads?.placement === "middle" && index === Math.ceil(visibleProducts.length / 2) && <div className="product-grid-ad"><PlacementAd ad={site.data?.ads} /></div>}<article className={`product-card accent-${product.accent}`} key={product.name}><div className="product-visual"><div className="visual-glow" /><span className="product-badge">{product.badge || "HTML / CSS / JS"}</span><div className="visual-icon"><Globe2 size={30} /></div><span className="visual-code">&lt;/&gt;</span></div><div className="product-body"><div className="product-category">{product.category}</div><h3>{product.name}</h3><p>{product.description}</p><div className="tag-row">{product.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="product-footer"><div><span className="price">{product.price}</span>{product.oldPrice && <del>{product.oldPrice}</del>}</div><button className="buy-button" onClick={() => order(product.name)}>Beli script <ArrowUpRight size={16} /></button></div></div></article></>)}</div>
+        {site.data?.ads?.placement === "bottom" && <PlacementAd ad={site.data?.ads} />}
         {visibleProducts.length === 0 && <div className="empty-state">Script tidak ditemukan. Coba kata kunci atau kategori lain.</div>}
       </section>
 
