@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, renderTemplate } from "./routers";
+import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, protectGeneratedScript, renderTemplate } from "./routers";
 
 describe("script template helpers", () => {
   it("detects unique editable tokens in seller script", () => {
@@ -18,6 +18,14 @@ describe("script template helpers", () => {
   it("rejects incomplete template tokens before publication", () => {
     expect(() => prepareScriptTemplate('<h1>{{storeName</h1>')).toThrow("Token template tidak lengkap.");
     expect(prepareScriptTemplate('<h1>{{storeName}}</h1>')).toBe('<h1>{{storeName}}</h1>');
+  });
+
+  it("protects inline JavaScript while preserving HTML and image URLs", () => {
+    const output = protectGeneratedScript('<img src="https://example.com/banner.jpg"><script>const secretName = "Toko Saya"; console.log(secretName);</script>');
+    expect(output).toContain('<img src="https://example.com/banner.jpg">');
+    expect(output).toContain("<script>");
+    expect(output).toContain("</script>");
+    expect(output).not.toContain('console.log(secretName)');
   });
 
   it("sets subscription expiry exactly 30 days later", () => {

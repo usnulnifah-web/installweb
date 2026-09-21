@@ -8,6 +8,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
+import JavaScriptObfuscator from "javascript-obfuscator";
 
 const roleProcedure = (role: "admin" | "seller" | "buyer") => protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== role) throw new TRPCError({ code: "FORBIDDEN", message: `Akses khusus ${role}.` });
@@ -67,6 +68,30 @@ function safeTemplateConfig(config: Record<string, string>) {
 
 export function renderTemplate(script: string, config: Record<string, string>) {
   return script.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_, key: string) => config[key] ?? "");
+}
+
+/** Protects generated inline JavaScript while keeping HTML/CSS and image URLs compatible. */
+export function protectGeneratedScript(script: string) {
+  return script
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (_full, open: string, code: string, close: string) => {
+      if (!code.trim()) return `${open}${code}${close}`;
+      const protectedCode = JavaScriptObfuscator.obfuscate(code, {
+        compact: true,
+        controlFlowFlattening: true,
+        controlFlowFlatteningThreshold: 0.65,
+        deadCodeInjection: false,
+        disableConsoleOutput: true,
+        identifierNamesGenerator: "hexadecimal",
+        renameGlobals: false,
+        selfDefending: true,
+        stringArray: true,
+        stringArrayEncoding: ["base64"],
+        stringArrayThreshold: 0.75,
+      }).getObfuscatedCode();
+      return `${open}${protectedCode}${close}`;
+    })
+    .replace(/[ \t]{2,}/g, " ");
 }
 
 export function calculateSubscriptionExpiry(saleMode: "one_time" | "subscription", days: number, now = new Date()) {
@@ -158,7 +183,8 @@ export const appRouter = router({
       const defaultConfig = { storeName: ctx.user.name || "Toko Saya", primaryColor: "#c7f36b", secondaryColor: "#101311", logoUrl: "", bannerUrl: "", heroImage: "", apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
       const config = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
-      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, script: renderTemplate(source, config) };
+      const rendered = renderTemplate(source, config);
+      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, script: protectGeneratedScript(rendered) };
     }),
     saveTemplate: buyerProcedure.input(z.object({ productId: z.number().int(), config: z.record(z.string(), z.string()) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
