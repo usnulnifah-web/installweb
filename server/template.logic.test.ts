@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { calculateSubscriptionExpiry, detectTemplateTokens, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, protectGeneratedScript, renderTemplate, rewriteAssetUrl } from "./routers";
+import { calculateSubscriptionExpiry, detectTemplateTokens, extractProductThumbnail, isOrderAccessActive, normalizeScriptTemplate, prepareScriptTemplate, protectGeneratedScript, renderTemplate, rewriteAssetUrl } from "./routers";
 
 describe("script template helpers", () => {
   it("detects unique editable tokens in seller script", () => {
     expect(detectTemplateTokens('<h1>{{storeName}}</h1><img src="{{heroImage}}"><h1>{{storeName}}</h1>')).toEqual(["storeName", "heroImage"]);
+  });
+
+  it("extracts a safe first image URL for the live product card", () => {
+    expect(extractProductThumbnail('<h1>Produk</h1><img src="https://example.com/product.jpg">')).toBe("https://example.com/product.jpg");
+    expect(extractProductThumbnail('<img src="javascript:alert(1)">')).toBeNull();
   });
 
   it("renders buyer values into the generated script", () => {

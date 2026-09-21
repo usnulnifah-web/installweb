@@ -8,7 +8,7 @@ export const users = mysqlTable("users", {
 
 export const products = mysqlTable("products", {
   id: int("id").autoincrement().primaryKey(), sellerId: int("sellerId").notNull(), name: varchar("name", { length: 160 }).notNull(), description: text("description").notNull(), category: varchar("category", { length: 80 }).notNull(), price: int("price").notNull(),
-  scriptType: mysqlEnum("scriptType", ["full", "api"]).default("full").notNull(), saleMode: mysqlEnum("saleMode", ["one_time", "subscription"]).default("one_time").notNull(), subscriptionDays: int("subscriptionDays").default(30).notNull(), apiPath: varchar("apiPath", { length: 255 }), publicScript: text("publicScript"), secretScript: text("secretScript"),
+  scriptType: mysqlEnum("scriptType", ["full", "api"]).default("full").notNull(), saleMode: mysqlEnum("saleMode", ["one_time", "subscription"]).default("one_time").notNull(), subscriptionDays: int("subscriptionDays").default(30).notNull(), apiPath: varchar("apiPath", { length: 255 }), thumbnailUrl: varchar("thumbnailUrl", { length: 1000 }), publicScript: text("publicScript"), secretScript: text("secretScript"),
   status: mysqlEnum("status", ["pending", "published", "rejected", "blocked"]).default("pending").notNull(), isActive: int("isActive").default(1).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

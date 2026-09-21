@@ -47,6 +47,13 @@ function appearanceKeyFromMarkup(markup: string) {
   return null;
 }
 
+/** Returns the first safe image URL found in script markup for live product previews. */
+export function extractProductThumbnail(script: string) {
+  const match = script.match(/<img\b[^>]*?\bsrc\s*=\s*(?:"(https:\/\/[^"']+)"|'(https:\/\/[^"']+)'|([^\s>]+))/i);
+  const url = match?.[1] || match?.[2] || match?.[3] || "";
+  return /^(https:\/\/|\/manus-storage\/)/i.test(url) ? url.slice(0, 1000) : null;
+}
+
 /** Turns clearly labelled raw image URLs into editable appearance tokens. */
 export function normalizeScriptTemplate(script: string) {
   return script.replace(/<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi, (full, before: string, quote: string, _url: string, after: string) => {
@@ -187,7 +194,8 @@ export const appRouter = router({
       } catch (error) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Script belum berhasil diperbaiki: ${(error as Error).message}` });
       }
-      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, publicScript, secretScript, apiPath: input.apiPath || null, status: "pending" });
+      const thumbnailUrl = extractProductThumbnail(publicScript);
+      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, publicScript, secretScript, thumbnailUrl, apiPath: input.apiPath || null, status: "pending" });
       return { id: Number(result[0].insertId), status: "pending" as const };
     }),
     updateOrderStatus: sellerProcedure.input(z.object({ orderId: z.number().int(), status: z.enum(["paid", "delivered", "cancelled"]) })).mutation(async ({ ctx, input }) => {
@@ -201,7 +209,7 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) return { profile: ctx.user, products: [], orders: [], ownedProducts: [], transactions: [], adminFee: 5000 };
       const profile = (await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0] ?? ctx.user;
-      const published = await db.select({ id: products.id, sellerId: products.sellerId, name: products.name, description: products.description, category: products.category, price: products.price, scriptType: products.scriptType, saleMode: products.saleMode, subscriptionDays: products.subscriptionDays, publicScript: products.publicScript, apiPath: products.apiPath, status: products.status, isActive: products.isActive, createdAt: products.createdAt, updatedAt: products.updatedAt }).from(products).where(and(eq(products.status, "published"), eq(products.isActive, 1))).orderBy(desc(products.createdAt));
+      const published = await db.select({ id: products.id, sellerId: products.sellerId, name: products.name, description: products.description, category: products.category, price: products.price, scriptType: products.scriptType, saleMode: products.saleMode, subscriptionDays: products.subscriptionDays, thumbnailUrl: products.thumbnailUrl, publicScript: products.publicScript, apiPath: products.apiPath, status: products.status, isActive: products.isActive, createdAt: products.createdAt, updatedAt: products.updatedAt }).from(products).where(and(eq(products.status, "published"), eq(products.isActive, 1))).orderBy(desc(products.createdAt));
       const myOrders = await db.select().from(orders).where(eq(orders.buyerId, ctx.user.id)).orderBy(desc(orders.createdAt));
       const ownedIds = myOrders.filter((item) => item.status === "paid" || item.status === "delivered").map((item) => item.productId);
       const ownedRows = ownedIds.length ? await db.select().from(products).where(inArray(products.id, ownedIds)) : [];
