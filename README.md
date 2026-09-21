@@ -47,7 +47,12 @@ SMTP_SECURE=false
 SMTP_USER=alamat-gmail-atau-workspace
 SMTP_PASSWORD=app-password-google
 SMTP_FROM=alamat-gmail-atau-workspace
+APP_BASE_URL=https://domain-anda.com
+GOOGLE_CLIENT_ID=client-id-dari-google-cloud
+GOOGLE_CLIENT_SECRET=secret-dari-google-cloud
 ```
+
+Di Google Cloud Console, aktifkan Google Identity, buat OAuth Client ID tipe Web application, lalu tambahkan redirect URI `https://domain-anda.com/api/auth/google/callback`. Jangan commit `GOOGLE_CLIENT_SECRET` atau file `.env`.
 
 Jalankan migrasi dan aplikasi:
 
@@ -75,11 +80,13 @@ Jalankan migrasi setelah memperbarui kode:
 pnpm db:push
 ```
 
-Login OAuth Google tidak lagi digunakan oleh alur aplikasi.
+Login dapat dilakukan dengan username/password lokal atau Google OAuth. Google OAuth memerlukan `APP_BASE_URL`, `GOOGLE_CLIENT_ID`, dan `GOOGLE_CLIENT_SECRET`.
 
 ## Setup admin pertama
 
-Installer **tidak membuat akun admin**. Setelah website dibuka, jika database belum memiliki admin, seluruh halaman akan menampilkan **Buat akun admin pertama**. Login menggunakan akun Google, klik **Buat akun admin**, lalu gerbang setup otomatis mati.
+Installer **tidak membuat akun admin**. Setelah website dibuka, jika database belum memiliki admin, seluruh halaman akan menampilkan **Buat akun admin pertama**. Login menggunakan akun lokal atau Google, klik **Buat akun admin**, lalu gerbang setup otomatis mati.
+
+Admin dapat menyalakan atau mematikan login Google dari **Dashboard → Pengaturan toko → Login dengan Google**. Saat dimatikan, tombol Google disembunyikan dan callback OAuth ditolak. Saklar aktif secara default setelah migrasi.
 
 ## Fitur keamanan
 

@@ -5,6 +5,7 @@ type Mode = "login" | "register" | "forgot" | "security" | "reset";
 
 export default function LocalAuthPanel({ firstAdmin = false }: { firstAdmin?: boolean }) {
   const utils = trpc.useUtils();
+  const site = trpc.site.config.useQuery();
   const [mode, setMode] = useState<Mode>(() => new URLSearchParams(window.location.search).has("token") ? "reset" : firstAdmin ? "register" : "login");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -30,6 +31,8 @@ export default function LocalAuthPanel({ firstAdmin = false }: { firstAdmin?: bo
   const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending || securityReset.isPending;
   const title = mode === "login" ? "Masuk ke akun" : mode === "register" ? (firstAdmin ? "Buat admin pertama" : "Buat akun") : mode === "forgot" ? "Reset lewat email" : mode === "security" ? "Reset dengan pertanyaan" : "Password baru";
   return <section className="dash-login"><div className="dash-login-mark">🔐</div><div className="dash-eyebrow">ScriptStore account</div><h1>{title}</h1><p>{mode === "forgot" ? "Masukkan username. Jika akun dan SMTP tersedia, tautan reset dikirim ke email terdaftar." : mode === "security" ? "Jawab pertanyaan keamanan yang dibuat saat pendaftaran." : mode === "reset" ? "Buat password baru minimal 15 karakter." : mode === "register" ? "Gunakan password panjang dan isi pertanyaan keamanan untuk pemulihan." : "Gunakan username dan password untuk melanjutkan."}</p>
+    {site.data?.googleLoginEnabled !== false && (mode === "login" || mode === "register") && <button type="button" className="outline-button" onClick={() => { window.location.href = "/api/auth/google"; }}>Lanjutkan dengan Google</button>}
+    {site.data?.googleLoginEnabled !== false && (mode === "login" || mode === "register") && <div className="auth-divider">atau gunakan akun lokal</div>}
     <form onSubmit={submit} className="auth-form">
       {mode === "register" && <><input required value={fields.name} onChange={update("name")} placeholder="Nama lengkap" /><input required type="email" value={fields.email} onChange={update("email")} placeholder="Email terverifikasi" /></>}
       {(mode === "login" || mode === "register" || mode === "forgot" || mode === "security") && <input required value={fields.username} onChange={update("username")} placeholder={mode === "forgot" || mode === "security" ? "Username atau email" : "Username"} />}
