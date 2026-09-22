@@ -15,9 +15,13 @@ describe("script template helpers", () => {
     expect(renderTemplate("{{storeName}} / {{primaryColor}} / {{missing}}", { storeName: "Toko Saya", primaryColor: "#c7f36b" })).toBe("Toko Saya / #c7f36b / ");
   });
 
-  it("turns labelled raw banner and logo URLs into editable appearance fields", () => {
+  it("turns every raw image into an editable appearance field", () => {
     const raw = '<img id="banner-utama" src="https://example.com/banner.jpg"><img class="logo" src="https://example.com/logo.png"><img src="https://example.com/icon.png">';
-    expect(normalizeScriptTemplate(raw)).toBe('<img id="banner-utama" src="{{bannerUrl}}"><img class="logo" src="{{logoUrl}}"><img src="https://example.com/icon.png">');
+    expect(normalizeScriptTemplate(raw)).toBe('<img id="banner-utama" src="{{bannerUrl}}"><img class="logo" src="{{logoUrl}}"><img src="{{image3}}">');
+  });
+
+  it("turns visible labels and buttons into editable text fields", () => {
+    expect(normalizeScriptTemplate('<span class="labeling">Nomor Telepon</span><button>Beli Sekarang</button>')).toBe('<span class="labeling">{{text1}}</span><button>{{text2}}</button>');
   });
 
   it("rejects incomplete template tokens before publication", () => {

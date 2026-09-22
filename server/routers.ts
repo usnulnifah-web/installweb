@@ -83,9 +83,16 @@ export function extractProductThumbnail(script: string) {
 
 /** Turns clearly labelled raw image URLs into editable appearance tokens. */
 export function normalizeScriptTemplate(script: string) {
-  return script.replace(/<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi, (full, before: string, quote: string, _url: string, after: string) => {
-    const key = appearanceKeyFromMarkup(`${before} ${after}`);
-    return key ? `<img${before}src=${quote}{{${key}}}${quote}${after}>` : full;
+  let imageIndex = 0;
+  let textIndex = 0;
+  const withImages = script.replace(/<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi, (full, before: string, quote: string, _url: string, after: string) => {
+    const index = ++imageIndex;
+    const key = appearanceKeyFromMarkup(`${before} ${after}`) || `image${index}`;
+    return `<img${before}src=${quote}{{${key}}}${quote}${after}>`;
+  });
+  return withImages.replace(/<(label|span|p|h[1-6]|button|a)\b([^>]*)>([^<]{2,160})<\/\1>/gi, (full, tag: string, attrs: string, text: string) => {
+    if (/\{\{/.test(text) || /^(https?:\/\/|[\s\d.,:/-]+)$/.test(text.trim())) return full;
+    return `<${tag}${attrs}>{{text${++textIndex}}}</${tag}>`;
   });
 }
 
@@ -340,7 +347,7 @@ export const appRouter = router({
       config.storeAccessKey = storeAccessKey;
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
       const rendered = applyLiveDesign(renderTemplate(source, config), config);
-      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: Array.from(new Set([...detectTemplateTokens(source), ...Object.keys(defaultDesignConfig)])), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
+      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
     }),
     saveTemplate: buyerProcedure.input(z.object({ productId: z.number().int(), config: z.record(z.string(), z.string()) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
