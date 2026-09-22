@@ -39,7 +39,7 @@ async function getAssetDomain(db: NonNullable<Awaited<ReturnType<typeof getDb>>>
 
 async function fetchBukaOlshopProducts(input: { token: string; page: number; category?: number; totalData?: number; search?: string }) {
   const token = input.token.trim();
-  if (!/^[A-Za-z0-9_-]{8,255}$/.test(token)) throw new TRPCError({ code: "BAD_REQUEST", message: "Token Open API BukaOlshop tidak valid." });
+  if (!/^[A-Za-z0-9_+/=-]{8,1024}$/.test(token)) throw new TRPCError({ code: "BAD_REQUEST", message: "Token Open API BukaOlshop tidak valid." });
   const params = new URLSearchParams({ token, page: String(input.page) });
   if (input.category) params.set("id_kategori", String(input.category));
   if (input.totalData) params.set("total_data", String(input.totalData));
@@ -368,7 +368,7 @@ export const appRouter = router({
       const assetDomain = await getAssetDomain(db);
       return { field: input.field, url: rewriteAssetUrl(stored.url, assetDomain) };
     }),
-    createOrder: buyerProcedure.input(z.object({ productId: z.number().int(), storeUrl: z.string().url().optional(), openApiToken: z.string().min(8).max(255).optional() })).mutation(async ({ ctx, input }) => {
+    createOrder: buyerProcedure.input(z.object({ productId: z.number().int(), storeUrl: z.string().url().optional(), openApiToken: z.string().min(8).max(1024).optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database belum tersedia." });
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.status, "published"), eq(products.isActive, 1))).limit(1))[0];
       if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
