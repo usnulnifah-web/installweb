@@ -71,6 +71,13 @@
       "when": 1790030000000,
       "tag": "0009_topup_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1790031000000,
+      "tag": "0010_live_design",
+      "breakpoints": true
     }
   ]
 }

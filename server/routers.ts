@@ -83,6 +83,20 @@ function safeTemplateConfig(config: Record<string, string>) {
   return clean;
 }
 
+const defaultDesignConfig = { primaryColor: "#c7f36b", secondaryColor: "#101311", textColor: "#f4f5ef", buttonColor: "#c7f36b", buttonTextColor: "#101311", fontSize: "16", borderRadius: "16", buttonLabel: "Beli sekarang", logoUrl: "", heroImage: "" };
+function safeDesignConfig(config?: Record<string, string> | null) {
+  const input = config || {};
+  const output: Record<string, string> = { ...defaultDesignConfig };
+  for (const key of Object.keys(defaultDesignConfig)) {
+    const value = String(input[key] ?? "").slice(0, 1000);
+    if (key.toLowerCase().includes("color") && value && !/^#[0-9a-f]{3,8}$/i.test(value)) continue;
+    if (key.toLowerCase().includes("url") && value && !/^(https:\/\/|\/manus-storage\/)/i.test(value)) continue;
+    if (["fontSize", "borderRadius"].includes(key) && value && !/^\d{1,3}$/.test(value)) continue;
+    output[key] = value;
+  }
+  return output;
+}
+
 function parseSafeImageDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
   if (!match) throw new TRPCError({ code: "BAD_REQUEST", message: "Gunakan gambar JPG, PNG, atau WebP." });
@@ -91,6 +105,12 @@ function parseSafeImageDataUrl(dataUrl: string) {
 
 export function renderTemplate(script: string, config: Record<string, string>) {
   return script.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_, key: string) => config[key] ?? "");
+}
+
+function applyLiveDesign(html: string, design: Record<string, string>) {
+  const css = `:root{--store-primary:${design.primaryColor};--store-secondary:${design.secondaryColor};--store-text:${design.textColor};--store-button:${design.buttonColor};--store-button-text:${design.buttonTextColor};--store-radius:${design.borderRadius}px;--store-size:${design.fontSize}px}body{background:var(--store-secondary)!important;color:var(--store-text)!important;font-size:var(--store-size)!important}button,.button,[type=button],[type=submit],a.cta,a.button{background:var(--store-button)!important;color:var(--store-button-text)!important;border-radius:var(--store-radius)!important}img{max-width:100%;border-radius:var(--store-radius)}h1,h2,h3{color:var(--store-text)}.store-primary{color:var(--store-primary)!important}.store-hero{background-image:url('${design.heroImage}')!important;background-size:cover;background-position:center}`;
+  const style = `<style data-scriptstore-live-design>${css}</style>`;
+  return /<head[\s>]/i.test(html) ? html.replace(/<head[^>]*>/i, (tag) => `${tag}${style}`) : `${style}${html}`;
 }
 
 export function rewriteAssetUrl(url: string, assetDomain: string) {
@@ -216,7 +236,7 @@ export const appRouter = router({
   products: router({ list: publicProcedure.query(() => getPublishedProducts()) }),
   seller: router({
     dashboard: sellerProcedure.query(async ({ ctx }) => ({ products: await getProductsBySeller(ctx.user.id), orders: await getOrdersBySeller(ctx.user.id) })),
-    createProduct: sellerProcedure.input(z.object({ name: z.string().min(2), description: z.string().min(10), category: z.string().min(2), price: z.number().int().positive(), scriptType: z.enum(["full", "api"]), saleMode: z.enum(["one_time", "subscription"]).default("one_time"), subscriptionDays: z.number().int().positive().max(3650).default(30), publicScript: z.string().min(1), secretScript: z.string().optional(), apiPath: z.string().max(255).optional() })).mutation(async ({ ctx, input }) => {
+    createProduct: sellerProcedure.input(z.object({ name: z.string().min(2), description: z.string().min(10), category: z.string().min(2), price: z.number().int().positive(), scriptType: z.enum(["full", "api"]), saleMode: z.enum(["one_time", "subscription"]).default("one_time"), subscriptionDays: z.number().int().positive().max(3650).default(30), publicScript: z.string().min(1), secretScript: z.string().optional(), apiPath: z.string().max(255).optional(), designConfig: z.record(z.string(), z.string()).optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (input.scriptType === "api" && !input.secretScript?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Script rahasia wajib diisi untuk produk API." });
@@ -229,9 +249,11 @@ export const appRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: `Script belum berhasil diperbaiki: ${(error as Error).message}` });
       }
       const thumbnailUrl = extractProductThumbnail(publicScript);
-      const result = await db.insert(products).values({ ...input, sellerId: ctx.user.id, publicScript, secretScript, thumbnailUrl, apiPath: input.apiPath || null, status: "pending" });
+      const result = await db.insert(products).values({ ...input, designConfig: JSON.stringify(safeDesignConfig(input.designConfig)), sellerId: ctx.user.id, publicScript, secretScript, thumbnailUrl, apiPath: input.apiPath || null, status: "pending" });
       return { id: Number(result[0].insertId), status: "pending" as const };
     }),
+    updateProductDesign: sellerProcedure.input(z.object({ productId: z.number().int(), designConfig: z.record(z.string(), z.string()) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const product = (await db.select({ id: products.id }).from(products).where(and(eq(products.id, input.productId), eq(products.sellerId, ctx.user.id))).limit(1))[0]; if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." }); await db.update(products).set({ designConfig: JSON.stringify(safeDesignConfig(input.designConfig)) }).where(eq(products.id, input.productId)); return { success: true }; }),
+    updateProductStatus: sellerProcedure.input(z.object({ productId: z.number().int(), status: z.enum(["published", "rejected", "pending"]) })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ status: input.status }).where(and(eq(products.id, input.productId), eq(products.sellerId, ctx.user.id))); return { success: true }; }),
     updateOrderStatus: sellerProcedure.input(z.object({ orderId: z.number().int(), status: z.enum(["paid", "delivered", "cancelled"]) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(orders).set({ status: input.status }).where(and(eq(orders.id, input.orderId), eq(orders.sellerId, ctx.user.id)));
@@ -260,13 +282,14 @@ export const appRouter = router({
       if (!order) throw new TRPCError({ code: "FORBIDDEN", message: "Masa aktif produk sudah habis atau belum dibeli." });
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.isActive, 1))).limit(1))[0]; if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk sedang dinonaktifkan admin." });
       const saved = (await db.select().from(productCustomizations).where(and(eq(productCustomizations.productId, input.productId), eq(productCustomizations.buyerId, ctx.user.id))).limit(1))[0];
-      const defaultConfig = { storeName: ctx.user.name || "Toko Saya", primaryColor: "#c7f36b", secondaryColor: "#101311", logoUrl: "", bannerUrl: "", heroImage: "", apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
+      const savedDesign = product.designConfig ? safeDesignConfig(JSON.parse(product.designConfig) as Record<string, string>) : safeDesignConfig();
+      const defaultConfig = { storeName: ctx.user.name || "Toko Saya", ...savedDesign, bannerUrl: savedDesign.heroImage, apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
       const assetDomain = await getAssetDomain(db);
       const rawConfig = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
       const config = Object.fromEntries(Object.entries(rawConfig).map(([key, value]) => [key, /url|image|logo|banner|hero/i.test(key) ? rewriteAssetUrl(value, assetDomain) : value]));
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
-      const rendered = renderTemplate(source, config);
-      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
+      const rendered = applyLiveDesign(renderTemplate(source, config), config);
+      return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: Array.from(new Set([...detectTemplateTokens(source), ...Object.keys(defaultDesignConfig)])), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
     }),
     saveTemplate: buyerProcedure.input(z.object({ productId: z.number().int(), config: z.record(z.string(), z.string()) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -343,6 +366,7 @@ export const appRouter = router({
     reviewTopup: adminProcedure.input(z.object({ topupId: z.number().int(), status: z.enum(["paid", "rejected"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const request = (await db.select().from(topupRequests).where(eq(topupRequests.id, input.topupId)).limit(1))[0]; if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "Permintaan top-up tidak ditemukan." }); if (request.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "Permintaan ini sudah diproses." }); await db.update(topupRequests).set({ status: input.status }).where(eq(topupRequests.id, request.id)); if (input.status === "paid") { await db.update(users).set({ balance: sql`${users.balance} + ${request.amount}` }).where(eq(users.id, request.userId)); await db.insert(transactions).values({ userId: request.userId, type: "credit", amount: request.amount, description: `Top-up ${request.method}: ${request.reference}` }); } return { success: true }; }),
     updateProductStatus: adminProcedure.input(z.object({ productId: z.number().int(), status: z.enum(["published", "rejected", "pending", "blocked"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ status: input.status }).where(eq(products.id, input.productId)); return { success: true }; }),
     updateProduct: adminProcedure.input(z.object({ productId: z.number().int(), name: z.string().min(2).optional(), description: z.string().min(2).optional(), price: z.number().int().positive().optional(), apiPath: z.string().max(255).optional(), saleMode: z.enum(["one_time", "subscription"]).optional(), subscriptionDays: z.number().int().positive().max(3650).optional() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); const { productId, ...changes } = input; await db.update(products).set(changes).where(eq(products.id, productId)); return { success: true }; }),
+    updateProductDesign: adminProcedure.input(z.object({ productId: z.number().int(), designConfig: z.record(z.string(), z.string()) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ designConfig: JSON.stringify(safeDesignConfig(input.designConfig)) }).where(eq(products.id, input.productId)); return { success: true }; }),
     toggleProduct: adminProcedure.input(z.object({ productId: z.number().int(), active: z.boolean() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.update(products).set({ isActive: input.active ? 1 : 0 }).where(eq(products.id, input.productId)); return { success: true }; }),
     deleteProduct: adminProcedure.input(z.object({ productId: z.number().int() })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); await db.delete(products).where(eq(products.id, input.productId)); return { success: true }; }),
     deleteUser: adminProcedure.input(z.object({ userId: z.number().int() })).mutation(async ({ ctx, input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" }); if (ctx.user.id === input.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "Admin tidak dapat menghapus akunnya sendiri." }); await db.delete(users).where(eq(users.id, input.userId)); return { success: true }; }),
