@@ -34,7 +34,7 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(""); setMessage("");
     try {
-      if (mode === "login") { await login.mutateAsync({ username: fields.username, password: fields.password, expectedRole: requiredRole === "admin" || requiredRole === "seller" ? requiredRole : undefined }); completeAuth(`Login ${copy.short} berhasil. Mengalihkan ke dashboard...`); }
+      if (mode === "login") { await login.mutateAsync({ username: fields.username, password: fields.password, expectedRole: requiredRole }); completeAuth(`Login ${copy.short} berhasil. Mengalihkan ke dashboard...`); }
       if (mode === "register") { await register.mutateAsync({ ...fields, requestedRole: requiredRole === "seller" ? "seller" : "buyer" }); completeAuth(`Pendaftaran ${copy.short.toLowerCase()} berhasil. Mengalihkan ke dashboard...`); }
       if (mode === "forgot") await forgot.mutateAsync({ identifier: fields.username });
       if (mode === "security") await securityReset.mutateAsync({ identifier: fields.username, answer: fields.securityAnswer, password: fields.password });
