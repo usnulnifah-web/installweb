@@ -186,3 +186,8 @@ body { background: #ffffff; color: #172033; }
   .dash-section-title p { color: #64748b !important; }
   .buyer-product, .seller-product, .dash-stat, .dash-section { background: #ffffff !important; color: #172033 !important; border-color: #e2e8f0 !important; box-shadow: 0 8px 24px rgba(15,23,42,.06) !important; }
 }
+
+/* Buyer hero must remain visible above dashboard theme overrides */
+.buyer-banner { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 190px; margin: 0 0 28px; padding: 28px 30px; overflow: hidden; border-radius: 22px; color: #ffffff !important; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 55%, #7f1d1d 100%) !important; box-shadow: 0 18px 40px rgba(127,29,29,.22); }
+.buyer-banner h2, .buyer-banner h2 em { color: #ffffff !important; }.buyer-banner p { color: rgba(255,255,255,.86) !important; }.buyer-banner svg { color: #bfdbfe !important; }
+@media (max-width: 620px) { .buyer-banner { min-height: 0; margin-bottom: 20px; padding: 20px; border-radius: 18px; } }
