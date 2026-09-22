@@ -7,6 +7,8 @@ import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import JavaScriptObfuscator from "javascript-obfuscator";
+import crypto from "node:crypto";
+import type { Request } from "express";
 import { clearSession, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, resetWithSecurityQuestion, safeUser, setSession } from "./_core/localAuth";
 import { MIN_PASSWORD_LENGTH } from "@shared/const";
 
@@ -47,6 +49,19 @@ async function fetchBukaOlshopProducts(input: { token: string; page: number; cat
   const payload = await response.json() as { code?: number; status?: string; page?: number; data?: unknown[] };
   if (payload.code && payload.code !== 200) throw new TRPCError({ code: "BAD_GATEWAY", message: payload.status || "Open API BukaOlshop menolak permintaan." });
   return { code: payload.code || 200, status: payload.status || "ok", page: payload.page || input.page, data: Array.isArray(payload.data) ? payload.data : [] };
+}
+
+function normalizeStoreUrl(value: string) {
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw new TRPCError({ code: "BAD_REQUEST", message: "URL toko tidak valid." }); }
+  if (parsed.protocol !== "https:") throw new TRPCError({ code: "BAD_REQUEST", message: "URL toko wajib menggunakan HTTPS." });
+  return `${parsed.protocol}//${parsed.host}`;
+}
+
+function storeOriginMatches(req: Request, storeUrl: string) {
+  const origin = String(req.headers.origin || req.headers.referer || "");
+  if (!origin) return false;
+  try { return new URL(origin).origin === storeUrl; } catch { return false; }
 }
 
 export function detectTemplateTokens(script: string) {
@@ -179,6 +194,17 @@ export const appRouter = router({
     }),
   }),
   system: systemRouter,
+  publicStore: router({
+    products: publicProcedure.input(z.object({ productId: z.number().int(), accessKey: z.string().min(32).max(128), page: z.number().int().min(1).max(600).default(1), category: z.number().int().positive().optional(), search: z.string().max(100).optional() })).query(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const product = (await db.select({ id: products.id, isActive: products.isActive }).from(products).where(and(eq(products.id, input.productId), eq(products.isActive, 1))).limit(1))[0];
+      if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak tersedia." });
+      const rows = await db.select().from(productCustomizations).where(and(eq(productCustomizations.productId, input.productId)));
+      const binding = rows.map((row) => { try { return { row, config: JSON.parse(row.config) as Record<string, string> }; } catch { return { row, config: {} }; } }).find(({ config }) => config.storeAccessKey === input.accessKey);
+      if (!binding || !binding.config.storeUrl || !storeOriginMatches(ctx.req, binding.config.storeUrl)) throw new TRPCError({ code: "FORBIDDEN", message: "Toko belum terdaftar untuk produk ini." });
+      return fetchBukaOlshopProducts({ token: binding.config.openApiToken || "", page: input.page, category: input.category, search: input.search });
+    }),
+  }),
   setup: router({
     status: publicProcedure.query(async () => {
       const db = await getDb();
@@ -308,8 +334,12 @@ export const appRouter = router({
       const savedDesign = product.designConfig ? safeDesignConfig(JSON.parse(product.designConfig) as Record<string, string>) : safeDesignConfig();
       const defaultConfig = { storeName: ctx.user.name || "Toko Saya", ...savedDesign, bannerUrl: savedDesign.heroImage, apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
       const assetDomain = await getAssetDomain(db);
-      const rawConfig = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
+      const rawConfig: Record<string, string> = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
+      const storeAccessKey = String(rawConfig.storeAccessKey || "");
+      delete rawConfig.openApiToken;
+      delete rawConfig.storeAccessKey;
       const config = Object.fromEntries(Object.entries(rawConfig).map(([key, value]) => [key, /url|image|logo|banner|hero/i.test(key) ? rewriteAssetUrl(value, assetDomain) : value]));
+      config.storeAccessKey = storeAccessKey;
       const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
       const rendered = applyLiveDesign(renderTemplate(source, config), config);
       return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: Array.from(new Set([...detectTemplateTokens(source), ...Object.keys(defaultDesignConfig)])), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
@@ -319,8 +349,10 @@ export const appRouter = router({
       const orderRows = await db.select().from(orders).where(and(eq(orders.buyerId, ctx.user.id), eq(orders.productId, input.productId))).orderBy(desc(orders.createdAt));
       const order = orderRows.find((item) => ["paid", "delivered"].includes(item.status) && (!item.expiresAt || item.expiresAt > new Date()));
       if (!order) throw new TRPCError({ code: "FORBIDDEN", message: "Masa aktif produk sudah habis atau belum dibeli." });
-      const config = JSON.stringify(safeTemplateConfig(input.config));
       const existing = (await db.select().from(productCustomizations).where(and(eq(productCustomizations.productId, input.productId), eq(productCustomizations.buyerId, ctx.user.id))).limit(1))[0];
+      const currentConfig = existing ? JSON.parse(existing.config) as Record<string, string> : {};
+      const nextConfig = { ...safeTemplateConfig(input.config), ...Object.fromEntries(["storeUrl", "openApiToken", "storeAccessKey"].filter((key) => currentConfig[key]).map((key) => [key, currentConfig[key]])) };
+      const config = JSON.stringify(nextConfig);
       if (existing) await db.update(productCustomizations).set({ config }).where(eq(productCustomizations.id, existing.id)); else await db.insert(productCustomizations).values({ productId: input.productId, buyerId: ctx.user.id, config });
       return { success: true };
     }),
@@ -336,16 +368,19 @@ export const appRouter = router({
       const assetDomain = await getAssetDomain(db);
       return { field: input.field, url: rewriteAssetUrl(stored.url, assetDomain) };
     }),
-    createOrder: buyerProcedure.input(z.object({ productId: z.number().int() })).mutation(async ({ ctx, input }) => {
+    createOrder: buyerProcedure.input(z.object({ productId: z.number().int(), storeUrl: z.string().url().optional(), openApiToken: z.string().min(8).max(255).optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database belum tersedia." });
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.status, "published"), eq(products.isActive, 1))).limit(1))[0];
       if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
+      const storeUrl = product.scriptType === "api" ? normalizeStoreUrl(input.storeUrl || "") : "";
+      if (product.scriptType === "api" && !input.openApiToken) throw new TRPCError({ code: "BAD_REQUEST", message: "URL toko dan token Open API wajib diisi untuk produk API." });
       const fee = await getAdminFee(db); const total = product.price + fee;
       const buyer = (await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0];
       if (!buyer || buyer.balance < total) throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Saldo tidak cukup. Dibutuhkan ${total}.` });
       const expiresAt = calculateSubscriptionExpiry(product.saleMode, product.subscriptionDays);
       const result = await db.insert(orders).values({ buyerId: ctx.user.id, sellerId: product.sellerId, productId: product.id, totalPrice: total, adminFee: fee, status: "paid", expiresAt });
       const orderId = Number(result[0].insertId);
+      if (product.scriptType === "api") await db.insert(productCustomizations).values({ productId: product.id, buyerId: ctx.user.id, config: JSON.stringify({ storeUrl, openApiToken: input.openApiToken, storeAccessKey: crypto.randomBytes(32).toString("hex") }) });
       await db.update(users).set({ balance: buyer.balance - total }).where(eq(users.id, ctx.user.id));
       await db.update(users).set({ balance: sql`${users.balance} + ${product.price}` }).where(eq(users.id, product.sellerId));
       await db.insert(transactions).values({ userId: ctx.user.id, orderId, type: "debit", amount: total, description: `Beli produk: ${product.name}` });
