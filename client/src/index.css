@@ -152,3 +152,4 @@ a { color: inherit; text-decoration: none; }
 .design-grid input[type="color"] { width: 100%; height: 48px; padding: 4px; border: 1px solid rgba(220,235,215,.45); border-radius: 11px; background: #182019; cursor: pointer; }
 .design-grid select option { color: #f7fbf3; background: #182019; }
 @media (max-width: 600px) { .design-grid { grid-template-columns: 1fr; padding: 0 16px 16px; }.design-grid .design-wide { grid-column: auto; }.design-panel summary { padding: 16px; }.design-panel > p { padding: 0 16px 14px; } }
+.seller-notice { min-height: 20px; margin: 0 0 12px; padding: 11px 13px; border: 1px solid rgba(199,243,107,.28); border-radius: 12px; color: #dff6c5; background: rgba(199,243,107,.08); font-size: 12px; }
