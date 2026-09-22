@@ -62,7 +62,7 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
       {mode === "login" && <div className="auth-actions"><button className="auth-link" onClick={() => setAuthMode("forgot")}>Lupa password?</button><button className="auth-link" onClick={() => setAuthMode("security")}>Gunakan pertanyaan keamanan</button></div>}
       {mode === "forgot" && <button className="auth-link" onClick={() => setAuthMode("security")}>Gunakan pertanyaan keamanan</button>}
       {mode !== "login" && mode !== "reset" && <button className="auth-link" onClick={() => setAuthMode("login")}><ArrowLeft size={14} /> Kembali ke login</button>}
-      {mode === "login" && <div className="auth-register-prompt">Belum punya akun? <button className="auth-link inline" onClick={() => setAuthMode("register")}>Daftar sebagai {copy.short.toLowerCase()}</button></div>}
+      {mode === "login" && requiredRole !== "admin" && <div className="auth-register-prompt">Belum punya akun? <button className="auth-link inline" onClick={() => setAuthMode("register")}>Daftar sebagai {copy.short.toLowerCase()}</button></div>}
       {mode === "login" && requiredRole === "admin" && <small className="auth-note">Akses admin hanya untuk akun Administrator.</small>}
     </section>
     <p className="auth-footer">Aman, cepat, dan siap digunakan untuk bisnis digital Anda.</p>
