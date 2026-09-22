@@ -345,7 +345,8 @@ export const appRouter = router({
       delete rawConfig.storeAccessKey;
       const config = Object.fromEntries(Object.entries(rawConfig).map(([key, value]) => [key, /url|image|logo|banner|hero/i.test(key) ? rewriteAssetUrl(value, assetDomain) : value]));
       config.storeAccessKey = storeAccessKey;
-      const source = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
+      const rawSource = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
+      const source = prepareScriptTemplate(rawSource);
       const rendered = applyLiveDesign(renderTemplate(source, config), config);
       return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
     }),
