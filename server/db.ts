@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, Order, PasswordResetToken, passwordResetTokens, Product, products, orders, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -38,7 +38,7 @@ export async function createPasswordResetToken(token: InsertPasswordResetToken) 
 export async function getPasswordResetToken(tokenHash: string): Promise<PasswordResetToken | undefined> { const db = await getDb(); if (!db) return undefined; return (await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash)).limit(1))[0]; }
 export async function consumePasswordResetToken(id: number) { const db = await getDb(); if (!db) throw new Error("Database belum siap."); await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, id)); }
 
-export async function getPublishedProducts(): Promise<Product[]> { const db = await getDb(); if (!db) return []; return db.select().from(products).where(eq(products.status, "published")).orderBy(desc(products.createdAt)); }
+export async function getPublishedProducts(): Promise<Product[]> { const db = await getDb(); if (!db) return []; return db.select().from(products).where(and(inArray(products.status, ["pending", "published"]), eq(products.isActive, 1))).orderBy(desc(products.createdAt)); }
 export async function getProductsBySeller(sellerId: number): Promise<Product[]> { const db = await getDb(); if (!db) return []; return db.select().from(products).where(eq(products.sellerId, sellerId)).orderBy(desc(products.createdAt)); }
 export async function getOrdersByBuyer(buyerId: number): Promise<Order[]> { const db = await getDb(); if (!db) return []; return db.select().from(orders).where(eq(orders.buyerId, buyerId)).orderBy(desc(orders.createdAt)); }
 export async function getOrdersBySeller(sellerId: number): Promise<Order[]> { const db = await getDb(); if (!db) return []; return db.select().from(orders).where(and(eq(orders.sellerId, sellerId))).orderBy(desc(orders.createdAt)); }

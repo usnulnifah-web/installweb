@@ -414,7 +414,7 @@ export const appRouter = router({
     }),
     createOrder: buyerProcedure.input(z.object({ productId: z.number().int(), storeUrl: z.string().url().optional(), openApiToken: z.string().min(8).max(2048).optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database belum tersedia." });
-      const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.status, "published"), eq(products.isActive, 1))).limit(1))[0];
+      const product = (await db.select().from(products).where(and(eq(products.id, input.productId), inArray(products.status, ["pending", "published"]), eq(products.isActive, 1))).limit(1))[0];
       if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
       const storeUrl = product.scriptType === "api" ? normalizeStoreUrl(input.storeUrl || "") : "";
       if (product.scriptType === "api" && !input.openApiToken) throw new TRPCError({ code: "BAD_REQUEST", message: "URL toko dan token Open API wajib diisi untuk produk API." });
