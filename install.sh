@@ -12,12 +12,11 @@ command -v git >/dev/null 2>&1 || fail "Git belum terpasang. Install Git lalu ja
 command -v node >/dev/null 2>&1 || fail "Node.js belum terpasang. Gunakan Node.js 20 atau lebih baru."
 node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)' || fail "Node.js minimal versi 20 diperlukan."
 
-if ! command -v pnpm >/dev/null 2>&1; then
-  log "pnpm belum ada, mengaktifkan Corepack..."
-  corepack enable >/dev/null 2>&1 || true
-  corepack prepare pnpm@10.4.1 --activate >/dev/null 2>&1 || npm install --global pnpm@10.4.1
+if ! command -v pnpm >/dev/null 2>&1 || ! pnpm --version >/dev/null 2>&1; then
+  log "pnpm belum tersedia atau tidak dapat dijalankan, memasang pnpm 10.4.1..."
+  npm install --global pnpm@10.4.1 >/dev/null 2>&1 || fail "pnpm gagal disiapkan."
 fi
-command -v pnpm >/dev/null 2>&1 || fail "pnpm gagal disiapkan."
+command -v pnpm >/dev/null 2>&1 && pnpm --version >/dev/null 2>&1 || fail "pnpm gagal disiapkan."
 
 if [ -d "$APP_DIR/.git" ]; then
   log "Folder $APP_DIR sudah ada, mengambil perubahan terbaru..."
@@ -51,5 +50,5 @@ fi
 log "Memvalidasi TypeScript dan build..."
 pnpm check
 pnpm build
-log "Selesai. Jalankan: cd $APP_DIR && pnpm dev"
+log "Selesai. Untuk production jalankan: cd $APP_DIR && pnpm start"
 log "Saat website pertama dibuka, semua halaman akan mengarah ke setup Buat akun admin pertama."
