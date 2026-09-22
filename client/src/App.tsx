@@ -66,7 +66,7 @@ const categories = ["Semua", "Toko Online", "Provider", "Landing Page"];
 
 function App() {
   if (window.location.pathname.startsWith("/admin/login")) return <LocalAuthPanel requiredRole="admin" />;
-  if (window.location.pathname.startsWith("/seller/login")) return <LocalAuthPanel requiredRole="seller" />;
+  if (window.location.pathname.startsWith("/seller/login") || window.location.pathname.startsWith("/saller/login")) return <LocalAuthPanel requiredRole="seller" />;
   if (window.location.pathname.startsWith("/reset-password")) return <LocalAuthPanel />;
   return <SetupGate />;
 }
