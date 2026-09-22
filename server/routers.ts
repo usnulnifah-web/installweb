@@ -167,10 +167,10 @@ export const appRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: error instanceof Error ? error.message : "Login gagal." });
       }
     }),
-    register: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(15), name: z.string().min(2).max(120), email: z.string().email(), securityQuestion: z.string().min(8).max(255), securityAnswer: z.string().min(2).max(255) })).mutation(async ({ ctx, input }) => {
+    register: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(15), name: z.string().min(2).max(120), email: z.string().email(), securityQuestion: z.string().min(8).max(255), securityAnswer: z.string().min(2).max(255), requestedRole: z.enum(["buyer", "seller"]).default("buyer") })).mutation(async ({ ctx, input }) => {
       try {
         if ((input.securityQuestion && !input.securityAnswer) || (!input.securityQuestion && input.securityAnswer)) throw new Error("Pertanyaan dan jawaban keamanan harus diisi bersama.");
-        const user = await registerLocalUser(input);
+        const user = await registerLocalUser(input, input.requestedRole);
         if (!user) throw new Error("Akun gagal dibuat.");
         await setSession(ctx.res, ctx.req, user);
         return safeUser(user);

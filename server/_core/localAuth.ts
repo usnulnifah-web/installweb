@@ -42,7 +42,7 @@ export async function authenticateLocalRequest(req: Request): Promise<User | nul
   } catch { return null; }
 }
 
-export async function registerLocalUser(input: { username: string; password: string; name: string; email: string; securityQuestion?: string; securityAnswer?: string }) {
+export async function registerLocalUser(input: { username: string; password: string; name: string; email: string; securityQuestion?: string; securityAnswer?: string }, role: "buyer" | "seller" = "buyer") {
   const username = clean(input.username);
   const email = clean(input.email);
   if (!/^[a-z0-9_]{3,32}$/.test(username)) throw new Error("Username harus 3–32 karakter dan hanya boleh berisi huruf kecil, angka, atau underscore.");
@@ -53,7 +53,7 @@ export async function registerLocalUser(input: { username: string; password: str
   const answer = input.securityQuestion && input.securityAnswer ? hashSecret(normalizeAnswer(input.securityAnswer)) : null;
   const database = await db.getDb(); if (!database) throw new Error("Database belum siap.");
   const openId = `local_${crypto.randomUUID()}`;
-  const result = await database.insert((await import("../../drizzle/schema")).users).values({ openId, username, passwordHash: hashSecret(input.password), securityQuestion: input.securityQuestion?.trim() || null, securityAnswerHash: answer, name: input.name.trim(), email, loginMethod: "password" });
+  const result = await database.insert((await import("../../drizzle/schema")).users).values({ openId, username, passwordHash: hashSecret(input.password), securityQuestion: input.securityQuestion?.trim() || null, securityAnswerHash: answer, name: input.name.trim(), email, loginMethod: "password", role });
   return await db.getUserById(Number(result[0].insertId));
 }
 
