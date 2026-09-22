@@ -20,8 +20,8 @@ describe("script template helpers", () => {
     expect(normalizeScriptTemplate(raw)).toBe('<img id="banner-utama" src="{{bannerUrl}}"><img class="logo" src="{{logoUrl}}"><img src="{{image3}}">');
   });
 
-  it("turns visible labels and buttons into editable text fields", () => {
-    expect(normalizeScriptTemplate('<span class="labeling">Nomor Telepon</span><button>Beli Sekarang</button>')).toBe('<span class="labeling">{{text1}}</span><button>{{text2}}</button>');
+  it("turns visible labels and buttons into semantic editable fields", () => {
+    expect(normalizeScriptTemplate('<span class="labeling">Nomor Telepon</span><button>No Telepon</button>')).toBe('<span class="labeling">{{label_nomor_telepon}}</span><button>{{button_no_telepon}}</button>');
   });
 
   it("rejects incomplete template tokens before publication", () => {

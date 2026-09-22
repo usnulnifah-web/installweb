@@ -85,6 +85,7 @@ export function extractProductThumbnail(script: string) {
 export function normalizeScriptTemplate(script: string) {
   let imageIndex = 0;
   let textIndex = 0;
+  const semanticCounts = new Map<string, number>();
   const withImages = script.replace(/<img\b([^>]*?)\bsrc\s*=\s*(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi, (full, before: string, quote: string, _url: string, after: string) => {
     const index = ++imageIndex;
     const key = appearanceKeyFromMarkup(`${before} ${after}`) || `image${index}`;
@@ -92,8 +93,23 @@ export function normalizeScriptTemplate(script: string) {
   });
   return withImages.replace(/<(label|span|p|h[1-6]|button|a)\b([^>]*)>([^<]{2,160})<\/\1>/gi, (full, tag: string, attrs: string, text: string) => {
     if (/\{\{/.test(text) || /^(https?:\/\/|[\s\d.,:/-]+)$/.test(text.trim())) return full;
-    return `<${tag}${attrs}>{{text${++textIndex}}}</${tag}>`;
+    const kind = /^(button|a)$/i.test(tag) ? "button" : "label";
+    const slug = text.trim().toLowerCase().replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "").slice(0, 36) || `${kind}_${++textIndex}`;
+    const base = `${kind}_${slug}`;
+    const count = (semanticCounts.get(base) || 0) + 1;
+    semanticCounts.set(base, count);
+    const key = count === 1 ? base : `${base}_${count}`;
+    return `<${tag}${attrs}>{{${key}}}</${tag}>`;
   });
+}
+
+function dynamicTextDefaults(script: string) {
+  const defaults: Record<string, string> = {};
+  for (const key of detectTemplateTokens(script)) {
+    const match = key.match(/^(label|button)_(.+)$/i);
+    if (match) defaults[key] = match[2].replace(/_\d+$/, "").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+  return defaults;
 }
 
 /** Prepares raw seller code; unpublished products never expose unvalidated code. */
@@ -339,14 +355,14 @@ export const appRouter = router({
       const savedDesign = product.designConfig ? safeDesignConfig(JSON.parse(product.designConfig) as Record<string, string>) : safeDesignConfig();
       const defaultConfig = { storeName: ctx.user.name || "Toko Saya", ...savedDesign, bannerUrl: savedDesign.heroImage, apiBaseUrl: `${ctx.req.protocol}://${ctx.req.get("host")}`, apiProxyUrl: "/api/trpc/publicStore.products", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
       const assetDomain = await getAssetDomain(db);
-      const rawConfig: Record<string, string> = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
+      const rawSource = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
+      const source = prepareScriptTemplate(rawSource);
+      const rawConfig: Record<string, string> = { ...defaultConfig, ...dynamicTextDefaults(source), ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
       const storeAccessKey = String(rawConfig.storeAccessKey || "");
       delete rawConfig.closedApiKey;
       delete rawConfig.storeAccessKey;
       const config = Object.fromEntries(Object.entries(rawConfig).map(([key, value]) => [key, /url|image|logo|banner|hero/i.test(key) ? rewriteAssetUrl(value, assetDomain) : value]));
       config.storeAccessKey = storeAccessKey;
-      const rawSource = product.scriptType === "api" ? product.secretScript || product.publicScript || "" : product.publicScript || "";
-      const source = prepareScriptTemplate(rawSource);
       const rendered = applyLiveDesign(renderTemplate(source, config), config);
       return { product: { id: product.id, name: product.name, scriptType: product.scriptType }, placeholders: detectTemplateTokens(source), config, assetDomain, script: protectGeneratedScript(rendered, await getObfuscationEnabled(db)) };
     }),
