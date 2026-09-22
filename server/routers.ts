@@ -83,7 +83,7 @@ function safeTemplateConfig(config: Record<string, string>) {
   return clean;
 }
 
-const defaultDesignConfig = { primaryColor: "#c7f36b", secondaryColor: "#101311", textColor: "#f4f5ef", buttonColor: "#c7f36b", buttonTextColor: "#101311", fontSize: "16", borderRadius: "16", buttonLabel: "Beli sekarang", logoUrl: "", heroImage: "" };
+const defaultDesignConfig = { primaryColor: "#c7f36b", secondaryColor: "#101311", textColor: "#f4f5ef", buttonColor: "#c7f36b", buttonTextColor: "#101311", fontSize: "16", borderRadius: "16", buttonLabel: "Beli sekarang", storeLabel: "", logoUrl: "", faviconUrl: "", heroImage: "" };
 function safeDesignConfig(config?: Record<string, string> | null) {
   const input = config || {};
   const output: Record<string, string> = { ...defaultDesignConfig };
@@ -107,10 +107,15 @@ export function renderTemplate(script: string, config: Record<string, string>) {
   return script.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_, key: string) => config[key] ?? "");
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char] || char));
+}
 function applyLiveDesign(html: string, design: Record<string, string>) {
   const css = `:root{--store-primary:${design.primaryColor};--store-secondary:${design.secondaryColor};--store-text:${design.textColor};--store-button:${design.buttonColor};--store-button-text:${design.buttonTextColor};--store-radius:${design.borderRadius}px;--store-size:${design.fontSize}px}body{background:var(--store-secondary)!important;color:var(--store-text)!important;font-size:var(--store-size)!important}button,.button,[type=button],[type=submit],a.cta,a.button{background:var(--store-button)!important;color:var(--store-button-text)!important;border-radius:var(--store-radius)!important}img{max-width:100%;border-radius:var(--store-radius)}h1,h2,h3{color:var(--store-text)}.store-primary{color:var(--store-primary)!important}.store-hero{background-image:url('${design.heroImage}')!important;background-size:cover;background-position:center}`;
   const style = `<style data-scriptstore-live-design>${css}</style>`;
-  return /<head[\s>]/i.test(html) ? html.replace(/<head[^>]*>/i, (tag) => `${tag}${style}`) : `${style}${html}`;
+  const favicon = design.faviconUrl ? `<link rel="icon" href="${escapeHtml(design.faviconUrl)}">` : "";
+  const title = design.storeLabel ? `<title>${escapeHtml(design.storeLabel)}</title>` : "";
+  return /<head[\s>]/i.test(html) ? html.replace(/<head[^>]*>/i, (tag) => `${tag}${title}${favicon}${style}`) : `${title}${favicon}${style}${html}`;
 }
 
 export function rewriteAssetUrl(url: string, assetDomain: string) {
@@ -269,7 +274,9 @@ export const appRouter = router({
       const published = publishedRows.map((product) => ({ ...product, thumbnailUrl: product.thumbnailUrl || extractProductThumbnail(product.publicScript || "") }));
       const myOrders = await db.select().from(orders).where(eq(orders.buyerId, ctx.user.id)).orderBy(desc(orders.createdAt));
       const ownedIds = myOrders.filter((item) => item.status === "paid" || item.status === "delivered").map((item) => item.productId);
-      const ownedRows = ownedIds.length ? await db.select().from(products).where(inArray(products.id, ownedIds)) : [];
+      // Never include secretScript in the dashboard payload. The private API script is
+      // only read by the authorized template resolver after an active purchase check.
+      const ownedRows = ownedIds.length ? await db.select({ id: products.id, sellerId: products.sellerId, name: products.name, description: products.description, category: products.category, price: products.price, scriptType: products.scriptType, saleMode: products.saleMode, subscriptionDays: products.subscriptionDays, thumbnailUrl: products.thumbnailUrl, publicScript: products.publicScript, apiPath: products.apiPath, status: products.status, isActive: products.isActive, createdAt: products.createdAt, updatedAt: products.updatedAt }).from(products).where(inArray(products.id, ownedIds)) : [];
       const now = Date.now();
       const ownedProducts = ownedRows.map((product) => ({ ...product, thumbnailUrl: product.thumbnailUrl || extractProductThumbnail(product.publicScript || ""), accessActive: product.isActive === 1 && myOrders.some((order) => order.productId === product.id && (order.expiresAt === null || (order.expiresAt && order.expiresAt.getTime() > now))) }));
       const myTransactions = await db.select().from(transactions).where(eq(transactions.userId, ctx.user.id)).orderBy(desc(transactions.createdAt));
