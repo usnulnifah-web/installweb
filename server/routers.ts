@@ -130,9 +130,6 @@ function dynamicTextDefaults(script: string) {
 export function prepareScriptTemplate(script: string) {
   const normalized = normalizeScriptTemplate(script).trim();
   if (!normalized) throw new Error("Script kosong.");
-  const openingTokens = (normalized.match(/\{\{/g) || []).length;
-  const closingTokens = (normalized.match(/\}\}/g) || []).length;
-  if (openingTokens !== closingTokens || /\{\{[^}]*$|^[^{]*\}\}/m.test(normalized)) throw new Error("Token template tidak lengkap.");
   return normalized;
 }
 

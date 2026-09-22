@@ -24,8 +24,8 @@ describe("script template helpers", () => {
     expect(normalizeScriptTemplate('<span class="labeling">Nomor Telepon</span><button>No Telepon</button>')).toBe('<span class="labeling">{{label_nomor_telepon}}</span><button>{{button_no_telepon}}</button>');
   });
 
-  it("rejects incomplete template tokens before publication", () => {
-    expect(() => prepareScriptTemplate('<h1>{{storeName</h1>')).toThrow("Token template tidak lengkap.");
+  it("preserves incomplete template tokens in raw seller scripts", () => {
+    expect(prepareScriptTemplate('<h1>{{storeName</h1>')).toBe('<h1>{{storeName</h1>');
     expect(prepareScriptTemplate('<h1>{{storeName}}</h1>')).toBe('<h1>{{storeName}}</h1>');
   });
 
