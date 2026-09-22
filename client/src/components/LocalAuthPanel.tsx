@@ -2,8 +2,9 @@ import { FormEvent, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 type Mode = "login" | "register" | "forgot" | "security" | "reset";
+type RequiredRole = "admin" | "seller";
 
-export default function LocalAuthPanel({ firstAdmin = false }: { firstAdmin?: boolean }) {
+export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { firstAdmin?: boolean; requiredRole?: RequiredRole }) {
   const utils = trpc.useUtils();
   const site = trpc.site.config.useQuery();
   const [mode, setMode] = useState<Mode>(() => new URLSearchParams(window.location.search).has("token") ? "reset" : firstAdmin ? "register" : "login");
@@ -21,7 +22,7 @@ export default function LocalAuthPanel({ firstAdmin = false }: { firstAdmin?: bo
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(""); setMessage("");
     try {
-      if (mode === "login") await login.mutateAsync({ username: fields.username, password: fields.password });
+      if (mode === "login") await login.mutateAsync({ username: fields.username, password: fields.password, expectedRole: requiredRole });
       if (mode === "register") await register.mutateAsync(fields);
       if (mode === "forgot") await forgot.mutateAsync({ identifier: fields.username });
       if (mode === "security") await securityReset.mutateAsync({ identifier: fields.username, answer: fields.securityAnswer, password: fields.password });
@@ -29,10 +30,11 @@ export default function LocalAuthPanel({ firstAdmin = false }: { firstAdmin?: bo
     } catch (e) { setError(e instanceof Error ? e.message : "Permintaan gagal."); }
   };
   const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending || securityReset.isPending;
-  const title = mode === "login" ? "Masuk ke akun" : mode === "register" ? (firstAdmin ? "Buat admin pertama" : "Buat akun") : mode === "forgot" ? "Reset lewat email" : mode === "security" ? "Reset dengan pertanyaan" : "Password baru";
+  const roleLabel = requiredRole === "admin" ? "Admin" : requiredRole === "seller" ? "Penjual" : "Akun";
+  const title = mode === "login" ? `Login ${roleLabel}` : mode === "register" ? (firstAdmin ? "Buat admin pertama" : "Buat akun") : mode === "forgot" ? "Reset lewat email" : mode === "security" ? "Reset dengan pertanyaan" : "Password baru";
   return <section className="dash-login"><div className="dash-login-mark">🔐</div><div className="dash-eyebrow">ScriptStore account</div><h1>{title}</h1><p>{mode === "forgot" ? "Masukkan username. Jika akun dan SMTP tersedia, tautan reset dikirim ke email terdaftar." : mode === "security" ? "Jawab pertanyaan keamanan yang dibuat saat pendaftaran." : mode === "reset" ? "Buat password baru minimal 15 karakter." : mode === "register" ? "Gunakan password panjang dan isi pertanyaan keamanan untuk pemulihan." : "Gunakan username dan password untuk melanjutkan."}</p>
-    {site.data?.googleLoginEnabled !== false && (mode === "login" || mode === "register") && <button type="button" className="outline-button" onClick={() => { window.location.href = "/api/auth/google"; }}>Lanjutkan dengan Google</button>}
-    {site.data?.googleLoginEnabled !== false && (mode === "login" || mode === "register") && <div className="auth-divider">atau gunakan akun lokal</div>}
+    {site.data?.googleLoginEnabled !== false && !requiredRole && (mode === "login" || mode === "register") && <button type="button" className="outline-button" onClick={() => { window.location.href = "/api/auth/google"; }}>Lanjutkan dengan Google</button>}
+    {site.data?.googleLoginEnabled !== false && !requiredRole && (mode === "login" || mode === "register") && <div className="auth-divider">atau gunakan akun lokal</div>}
     <form onSubmit={submit} className="auth-form">
       {mode === "register" && <><input required value={fields.name} onChange={update("name")} placeholder="Nama lengkap" /><input required type="email" value={fields.email} onChange={update("email")} placeholder="Email terverifikasi" /></>}
       {(mode === "login" || mode === "register" || mode === "forgot" || mode === "security") && <input required value={fields.username} onChange={update("username")} placeholder={mode === "forgot" || mode === "security" ? "Username atau email" : "Username"} />}
@@ -45,6 +47,8 @@ export default function LocalAuthPanel({ firstAdmin = false }: { firstAdmin?: bo
     {mode === "login" && <><button className="text-button" onClick={() => setMode("forgot")}>Lupa password lewat email</button><button className="text-button" onClick={() => setMode("security")}>Lupa password lewat pertanyaan keamanan</button></>}
     {mode === "forgot" && <button className="text-button" onClick={() => setMode("security")}>Gunakan pertanyaan keamanan</button>}
     {mode !== "login" && mode !== "reset" && <button className="text-button" onClick={() => setMode("login")}>Kembali ke login</button>}
-    {mode === "login" && <button className="text-button" onClick={() => setMode("register")}>Belum punya akun? Daftar</button>}
+    {mode === "login" && !requiredRole && <button className="text-button" onClick={() => setMode("register")}>Belum punya akun? Daftar</button>}
+    {mode === "login" && requiredRole === "seller" && <small>Akun penjual dibuat atau diaktifkan oleh admin.</small>}
+    {mode === "login" && requiredRole === "admin" && <small>Gunakan akun dengan role Administrator.</small>}
   </section>;
 }

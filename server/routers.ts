@@ -157,9 +157,10 @@ export const appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query(({ ctx }) => safeUser(ctx.user)),
-    login: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+    login: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(1), expectedRole: z.enum(["admin", "seller"]).optional() })).mutation(async ({ ctx, input }) => {
       try {
         const user = await loginLocalUser(input.username, input.password);
+        if (input.expectedRole && user.role !== input.expectedRole) throw new Error(`Akun ini bukan akun ${input.expectedRole === "admin" ? "admin" : "penjual"}.`);
         await setSession(ctx.res, ctx.req, user);
         return safeUser(user);
       } catch (error) {

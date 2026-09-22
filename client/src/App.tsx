@@ -65,6 +65,8 @@ const products: Product[] = [
 const categories = ["Semua", "Toko Online", "Provider", "Landing Page"];
 
 function App() {
+  if (window.location.pathname.startsWith("/admin/login")) return <LocalAuthPanel requiredRole="admin" />;
+  if (window.location.pathname.startsWith("/seller/login")) return <LocalAuthPanel requiredRole="seller" />;
   if (window.location.pathname.startsWith("/reset-password")) return <LocalAuthPanel />;
   return <SetupGate />;
 }
@@ -174,6 +176,8 @@ function PublicApp() {
           <a href="#keunggulan" onClick={() => setMenuOpen(false)}>Keunggulan</a>
           <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
           <a className="nav-dashboard" href="/dashboard" onClick={() => setMenuOpen(false)}>Dashboard</a>
+          <a className="nav-dashboard" href="/seller/login" onClick={() => setMenuOpen(false)}>Login penjual</a>
+          <a className="nav-dashboard" href="/admin/login" onClick={() => setMenuOpen(false)}>Login admin</a>
           <button className="nav-order" onClick={() => order()}>Order sekarang <ArrowUpRight size={16} /></button>
         </nav>
         <button className="menu-button" aria-label="Buka menu" onClick={() => setMenuOpen((value) => !value)}>
