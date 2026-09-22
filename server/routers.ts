@@ -35,6 +35,20 @@ async function getAssetDomain(db: NonNullable<Awaited<ReturnType<typeof getDb>>>
   return row?.assetDomain || "";
 }
 
+async function fetchBukaOlshopProducts(input: { token: string; page: number; category?: number; totalData?: number; search?: string }) {
+  const token = input.token.trim();
+  if (!/^[A-Za-z0-9_-]{8,255}$/.test(token)) throw new TRPCError({ code: "BAD_REQUEST", message: "Token Open API BukaOlshop tidak valid." });
+  const params = new URLSearchParams({ token, page: String(input.page) });
+  if (input.category) params.set("id_kategori", String(input.category));
+  if (input.totalData) params.set("total_data", String(input.totalData));
+  if (input.search) params.set("cari_nama_produk", input.search.slice(0, 100));
+  const response = await fetch(`https://openapi.bukaolshop.net/v1/app/produk?${params.toString()}`, { signal: AbortSignal.timeout(10_000), headers: { Accept: "application/json" } });
+  if (!response.ok) throw new TRPCError({ code: "BAD_GATEWAY", message: `Open API BukaOlshop mengembalikan HTTP ${response.status}.` });
+  const payload = await response.json() as { code?: number; status?: string; page?: number; data?: unknown[] };
+  if (payload.code && payload.code !== 200) throw new TRPCError({ code: "BAD_GATEWAY", message: payload.status || "Open API BukaOlshop menolak permintaan." });
+  return { code: payload.code || 200, status: payload.status || "ok", page: payload.page || input.page, data: Array.isArray(payload.data) ? payload.data : [] };
+}
+
 export function detectTemplateTokens(script: string) {
   return Array.from(new Set(Array.from(script.matchAll(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g), (match) => match[1])));
 }
@@ -266,6 +280,7 @@ export const appRouter = router({
     }),
   }),
   buyer: router({
+    openApiProducts: buyerProcedure.input(z.object({ token: z.string().min(8).max(255), page: z.number().int().min(1).max(600).default(1), category: z.number().int().positive().optional(), totalData: z.number().int().min(10).max(100).multipleOf(10).optional(), search: z.string().max(100).optional() })).query(async ({ input }) => fetchBukaOlshopProducts(input)),
     dashboard: buyerProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return { profile: ctx.user, products: [], orders: [], ownedProducts: [], transactions: [], adminFee: 5000 };
