@@ -112,7 +112,7 @@ function safeTemplateConfig(config: Record<string, string>) {
   return clean;
 }
 
-const defaultDesignConfig = { primaryColor: "#c7f36b", secondaryColor: "#101311", textColor: "#f4f5ef", buttonColor: "#c7f36b", buttonTextColor: "#101311", fontSize: "16", borderRadius: "16", buttonLabel: "Beli sekarang", storeLabel: "", logoUrl: "", faviconUrl: "", heroImage: "" };
+const defaultDesignConfig = { primaryColor: "#c7f36b", secondaryColor: "#101311", textColor: "#f4f5ef", buttonColor: "#c7f36b", buttonTextColor: "#101311", fontSize: "16", borderRadius: "16", buttonLabel: "Beli sekarang", phoneLabel: "Nomor Telepon", storeLabel: "", logoUrl: "", faviconUrl: "", heroImage: "" };
 function safeDesignConfig(config?: Record<string, string> | null) {
   const input = config || {};
   const output: Record<string, string> = { ...defaultDesignConfig };
@@ -332,7 +332,7 @@ export const appRouter = router({
       const product = (await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.isActive, 1))).limit(1))[0]; if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Produk sedang dinonaktifkan admin." });
       const saved = (await db.select().from(productCustomizations).where(and(eq(productCustomizations.productId, input.productId), eq(productCustomizations.buyerId, ctx.user.id))).limit(1))[0];
       const savedDesign = product.designConfig ? safeDesignConfig(JSON.parse(product.designConfig) as Record<string, string>) : safeDesignConfig();
-      const defaultConfig = { storeName: ctx.user.name || "Toko Saya", ...savedDesign, bannerUrl: savedDesign.heroImage, apiBaseUrl: "", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
+      const defaultConfig = { storeName: ctx.user.name || "Toko Saya", ...savedDesign, bannerUrl: savedDesign.heroImage, apiBaseUrl: `${ctx.req.protocol}://${ctx.req.get("host")}`, apiProxyUrl: "/api/trpc/publicStore.products", apiPath: product.apiPath || "/api", openOlshopUrl: "", productId: String(product.id), accessExpiresAt: order.expiresAt?.toISOString() || "" };
       const assetDomain = await getAssetDomain(db);
       const rawConfig: Record<string, string> = { ...defaultConfig, ...(saved ? JSON.parse(saved.config) as Record<string, string> : {}) };
       const storeAccessKey = String(rawConfig.storeAccessKey || "");

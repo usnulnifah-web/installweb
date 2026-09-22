@@ -63,6 +63,13 @@ async function startServer() {
     } catch (error) { console.error("[Topup webhook]", error); return res.status(500).json({ error: "Webhook gagal diproses." }); }
   });
   // tRPC API
+  app.use("/api/trpc/publicStore.products", (req, res, next) => {
+    const origin = req.header("origin");
+    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({
