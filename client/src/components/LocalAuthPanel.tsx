@@ -24,9 +24,10 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
   const login = trpc.auth.login.useMutation({ onSuccess: async () => { await utils.auth.me.invalidate(); } });
   const register = trpc.auth.register.useMutation({ onSuccess: async () => { await utils.auth.me.invalidate(); } });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: (data) => setMessage(data.message) });
-  const resetSuccess = () => { setError(""); setMessage(`Password berhasil diubah. Minimal ${MIN_PASSWORD_LENGTH} karakter. Silakan login.`); setMode("login"); };
-  const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => { resetSuccess(); window.history.replaceState({}, "", window.location.pathname); } });
+  const resetSuccess = () => { setError(""); setMessage(`Password berhasil diubah. Minimal ${MIN_PASSWORD_LENGTH} karakter. Silakan login.`); setFields((current) => ({ ...current, password: "" })); setMode("login"); window.history.replaceState({}, "", window.location.pathname); };
+  const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => { resetSuccess(); } });
   const securityReset = trpc.auth.resetWithSecurityQuestion.useMutation({ onSuccess: resetSuccess });
+  const submitButtonType = "submit" as const;
   const update = (key: keyof typeof fields) => (event: React.ChangeEvent<HTMLInputElement>) => setFields((current) => ({ ...current, [key]: event.target.value }));
   const setAuthMode = (next: Mode) => { setError(""); setMessage(""); setMode(next); };
   const completeAuth = (text: string) => { setMessage(text); window.setTimeout(() => window.location.assign("/dashboard"), 900); };
@@ -59,7 +60,7 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
         {mode === "security" && <><small className="auth-hint">{question.data || "Masukkan username/email untuk melihat pertanyaan."}</small><label>Jawaban keamanan<input required value={fields.securityAnswer} onChange={update("securityAnswer")} placeholder="Jawaban keamanan" /></label></>}
         {(mode === "login" || mode === "register" || mode === "reset" || mode === "security") && <label>Password<input required minLength={MIN_PASSWORD_LENGTH} type="password" value={fields.password} onChange={update("password")} placeholder={`Minimal ${MIN_PASSWORD_LENGTH} karakter`} /></label>}
         {mode === "register" && <><label>Pertanyaan keamanan<input required value={fields.securityQuestion} onChange={update("securityQuestion")} placeholder="Contoh: nama hewan peliharaan" /></label><label>Jawaban keamanan<input required value={fields.securityAnswer} onChange={update("securityAnswer")} placeholder="Jawaban Anda" /></label></>}
-        <button className="auth-submit" disabled={busy}>{busy ? "Memproses..." : mode === "login" ? `Masuk sebagai ${copy.short}` : mode === "register" ? `Daftar sebagai ${copy.short}` : mode === "forgot" ? "Kirim pemulihan" : mode === "security" ? "Ganti password" : "Simpan password baru"}</button>
+        <button type={submitButtonType} className="auth-submit" disabled={busy}>{busy ? "Memproses..." : mode === "login" ? `Masuk sebagai ${copy.short}` : mode === "register" ? `Daftar sebagai ${copy.short}` : mode === "forgot" ? "Kirim pemulihan" : mode === "security" ? "Ganti password" : "Simpan password baru"}</button>
       </form>
       {error && <div className="auth-error"><span>!</span>{error}</div>}{message && <div className="auth-message">{message}</div>}
       {mode === "login" && <div className="auth-actions"><button className="auth-link" onClick={() => setAuthMode("forgot")}>Lupa password?</button><button className="auth-link" onClick={() => setAuthMode("security")}>Gunakan pertanyaan keamanan</button></div>}
