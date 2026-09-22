@@ -4,7 +4,7 @@ CREATE TABLE `passwordResetTokens` (
 	`tokenHash` varchar(128) NOT NULL,
 	`expiresAt` timestamp NOT NULL,
 	`usedAt` timestamp,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	CONSTRAINT `passwordResetTokens_id` PRIMARY KEY(`id`),
 	CONSTRAINT `passwordResetTokens_tokenHash_unique` UNIQUE(`tokenHash`)
 );
