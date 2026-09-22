@@ -233,8 +233,9 @@ export const appRouter = router({
   profile: router({
     me: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) return ctx.user;
-      return (await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0] ?? ctx.user;
+      if (!db) return safeUser(ctx.user)!;
+      const row = (await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0] ?? ctx.user;
+      return safeUser(row)!;
     }),
     update: protectedProcedure.input(z.object({ name: z.string().min(2).optional(), phone: z.string().max(30).optional(), email: z.string().email().optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -284,7 +285,7 @@ export const appRouter = router({
     dashboard: buyerProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return { profile: ctx.user, products: [], orders: [], ownedProducts: [], transactions: [], adminFee: 5000 };
-      const profile = (await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0] ?? ctx.user;
+      const profile = safeUser((await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1))[0] ?? ctx.user)!;
       const publishedRows = await db.select({ id: products.id, sellerId: products.sellerId, name: products.name, description: products.description, category: products.category, price: products.price, scriptType: products.scriptType, saleMode: products.saleMode, subscriptionDays: products.subscriptionDays, thumbnailUrl: products.thumbnailUrl, publicScript: products.publicScript, apiPath: products.apiPath, status: products.status, isActive: products.isActive, createdAt: products.createdAt, updatedAt: products.updatedAt }).from(products).where(and(eq(products.status, "published"), eq(products.isActive, 1))).orderBy(desc(products.createdAt));
       const published = publishedRows.map((product) => ({ ...product, thumbnailUrl: product.thumbnailUrl || extractProductThumbnail(product.publicScript || "") }));
       const myOrders = await db.select().from(orders).where(eq(orders.buyerId, ctx.user.id)).orderBy(desc(orders.createdAt));
