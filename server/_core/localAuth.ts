@@ -8,6 +8,7 @@ import * as db from "../db";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { ENV } from "./env";
 import { getSessionCookieOptions } from "./cookies";
+import { MIN_PASSWORD_LENGTH } from "@shared/const";
 
 const RESET_TTL_MS = 20 * 60 * 1000;
 const attempts = new Map<string, { count: number; resetAt: number }>();
@@ -46,7 +47,7 @@ export async function registerLocalUser(input: { username: string; password: str
   const username = clean(input.username);
   const email = clean(input.email);
   if (!/^[a-z0-9_]{3,32}$/.test(username)) throw new Error("Username harus 3–32 karakter dan hanya boleh berisi huruf kecil, angka, atau underscore.");
-  if (input.password.length < 6) throw new Error("Password minimal 6 karakter.");
+  if (input.password.length < MIN_PASSWORD_LENGTH) throw new Error(`Password minimal ${MIN_PASSWORD_LENGTH} karakter.`);
   if (!input.name.trim() || !email.includes("@")) throw new Error("Nama dan email valid wajib diisi.");
   const existing = await db.getUserByUsername(username); if (existing) throw new Error("Username sudah digunakan.");
   const existingEmail = await db.getUserByEmail(email); if (existingEmail) throw new Error("Email sudah digunakan.");
@@ -85,7 +86,7 @@ export async function requestPasswordReset(identifier: string, origin: string) {
 }
 
 export async function resetPassword(token: string, password: string) {
-  if (password.length < 6) throw new Error("Password minimal 6 karakter.");
+  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Password minimal ${MIN_PASSWORD_LENGTH} karakter.`);
   const record = await db.getPasswordResetToken(hashToken(token));
   if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) throw new Error("Tautan reset tidak valid atau sudah kedaluwarsa.");
   const database = await db.getDb(); if (!database) throw new Error("Database belum siap.");
@@ -96,7 +97,7 @@ export async function resetPassword(token: string, password: string) {
 }
 
 export async function resetWithSecurityQuestion(identifier: string, answer: string, password: string) {
-  if (password.length < 6) throw new Error("Password minimal 6 karakter.");
+  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Password minimal ${MIN_PASSWORD_LENGTH} karakter.`);
   const key = clean(identifier);
   if (!allowAttempt(`security-reset:${key}`, 5)) throw new Error("Terlalu banyak percobaan. Coba lagi nanti.");
   const user = key.includes("@") ? await db.getUserByEmail(key) : await db.getUserByUsername(key);

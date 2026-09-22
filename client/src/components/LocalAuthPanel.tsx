@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, LockKeyhole, ShieldCheck, Store, UserRound } from "lucide-react";
+import { MIN_PASSWORD_LENGTH } from "@shared/const";
 
 type Mode = "login" | "register" | "forgot" | "security" | "reset";
 type RequiredRole = "admin" | "seller" | "buyer";
@@ -23,8 +24,9 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
   const login = trpc.auth.login.useMutation({ onSuccess: async () => { await utils.auth.me.invalidate(); } });
   const register = trpc.auth.register.useMutation({ onSuccess: async () => { await utils.auth.me.invalidate(); } });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: (data) => setMessage(data.message) });
-  const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => { setMessage("Password berhasil diubah. Silakan login."); setMode("login"); window.history.replaceState({}, "", window.location.pathname); } });
-  const securityReset = trpc.auth.resetWithSecurityQuestion.useMutation({ onSuccess: () => { setMessage("Password berhasil diubah. Silakan login."); setMode("login"); } });
+  const resetSuccess = () => { setError(""); setMessage(`Password berhasil diubah. Minimal ${MIN_PASSWORD_LENGTH} karakter. Silakan login.`); setMode("login"); };
+  const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => { resetSuccess(); window.history.replaceState({}, "", window.location.pathname); } });
+  const securityReset = trpc.auth.resetWithSecurityQuestion.useMutation({ onSuccess: resetSuccess });
   const update = (key: keyof typeof fields) => (event: React.ChangeEvent<HTMLInputElement>) => setFields((current) => ({ ...current, [key]: event.target.value }));
   const setAuthMode = (next: Mode) => { setError(""); setMessage(""); setMode(next); };
   const completeAuth = (text: string) => { setMessage(text); window.setTimeout(() => window.location.assign("/dashboard"), 900); };
@@ -42,7 +44,7 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
   const scoped = Boolean(requiredRole);
   const copy = requiredRole ? roleCopy[requiredRole] : roleCopy.buyer;
   const title = mode === "login" ? `Masuk sebagai ${copy.short}` : mode === "register" ? `Daftar sebagai ${copy.short}` : mode === "forgot" ? "Pulihkan akun" : mode === "security" ? "Verifikasi keamanan" : "Buat password baru";
-  const subtitle = mode === "login" ? copy.description : mode === "register" ? `Buat akun ${copy.short.toLowerCase()} baru dengan aman.` : mode === "forgot" ? "Kami akan membantu memulihkan akses ke akun Anda." : mode === "security" ? "Jawab pertanyaan keamanan lalu buat password baru." : "Gunakan password baru minimal 6 karakter.";
+  const subtitle = mode === "login" ? copy.description : mode === "register" ? `Buat akun ${copy.short.toLowerCase()} baru dengan aman.` : mode === "forgot" ? "Kami akan membantu memulihkan akses ke akun Anda." : mode === "security" ? "Jawab pertanyaan keamanan lalu buat password baru." : `Gunakan password baru minimal ${MIN_PASSWORD_LENGTH} karakter.`;
   return <main className="auth-page">
     <div className="auth-glow auth-glow-one" /><div className="auth-glow auth-glow-two" />
     <a className="auth-brand" href="/" aria-label="Kembali ke ScriptStore"><span className="brand-mark"><LockKeyhole size={17} /></span><span>script<span>store</span><small>.id</small></span></a>
@@ -55,7 +57,7 @@ export default function LocalAuthPanel({ firstAdmin = false, requiredRole }: { f
         {mode === "register" && <><label>Nama lengkap<input required value={fields.name} onChange={update("name")} placeholder="Nama lengkap" /></label><label>Email<input required type="email" value={fields.email} onChange={update("email")} placeholder="nama@email.com" /></label></>}
         {(mode === "login" || mode === "register" || mode === "forgot" || mode === "security") && <label>{mode === "forgot" || mode === "security" ? "Username atau Gmail/email" : mode === "login" ? "Username atau Gmail/email" : "Username"}<input required value={fields.username} onChange={update("username")} placeholder={mode === "forgot" || mode === "security" || mode === "login" ? "Username atau Gmail/email" : "Username"} /></label>}
         {mode === "security" && <><small className="auth-hint">{question.data || "Masukkan username/email untuk melihat pertanyaan."}</small><label>Jawaban keamanan<input required value={fields.securityAnswer} onChange={update("securityAnswer")} placeholder="Jawaban keamanan" /></label></>}
-        {(mode === "login" || mode === "register" || mode === "reset" || mode === "security") && <label>Password<input required minLength={6} type="password" value={fields.password} onChange={update("password")} placeholder="Minimal 6 karakter" /></label>}
+        {(mode === "login" || mode === "register" || mode === "reset" || mode === "security") && <label>Password<input required minLength={MIN_PASSWORD_LENGTH} type="password" value={fields.password} onChange={update("password")} placeholder={`Minimal ${MIN_PASSWORD_LENGTH} karakter`} /></label>}
         {mode === "register" && <><label>Pertanyaan keamanan<input required value={fields.securityQuestion} onChange={update("securityQuestion")} placeholder="Contoh: nama hewan peliharaan" /></label><label>Jawaban keamanan<input required value={fields.securityAnswer} onChange={update("securityAnswer")} placeholder="Jawaban Anda" /></label></>}
         <button className="auth-submit" disabled={busy}>{busy ? "Memproses..." : mode === "login" ? `Masuk sebagai ${copy.short}` : mode === "register" ? `Daftar sebagai ${copy.short}` : mode === "forgot" ? "Kirim pemulihan" : mode === "security" ? "Ganti password" : "Simpan password baru"}</button>
       </form>

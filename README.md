@@ -82,7 +82,7 @@ pnpm dev
 
 ## Login lokal dan lupa password
 
-Aplikasi menggunakan username dan password lokal. Pendaftaran meminta username, email, password minimal 15 karakter, serta pertanyaan dan jawaban keamanan. Jawaban keamanan di-hash dan tidak disimpan dalam teks biasa.
+Aplikasi menggunakan username dan password lokal. Pendaftaran meminta username, email, password minimal 6 karakter, serta pertanyaan dan jawaban keamanan. Jawaban keamanan di-hash dan tidak disimpan dalam teks biasa. Aturan minimum 6 karakter berlaku konsisten untuk login, pendaftaran, reset melalui email, dan reset melalui pertanyaan keamanan.
 
 Lupa password menggunakan token acak satu kali yang berlaku 20 menit dan dikirim melalui SMTP. Pesan API dibuat seragam agar tidak membocorkan apakah sebuah akun terdaftar. Untuk Gmail, aktifkan 2-Step Verification lalu buat Google App Password. Jangan commit `SMTP_PASSWORD` atau file `.env` ke repositori.
 
