@@ -58,10 +58,14 @@ export async function registerLocalUser(input: { username: string; password: str
 }
 
 export async function loginLocalUser(username: string, password: string) {
-  if (!allowAttempt(`login:${clean(username)}`, 10)) throw new Error("Terlalu banyak percobaan. Coba lagi nanti.");
+  const key = `login:${clean(username)}`;
   const user = await db.getUserByUsername(clean(username));
-  if (!user || !verifySecret(password, user.passwordHash)) throw new Error("Username atau password salah.");
+  if (!user || !verifySecret(password, user.passwordHash)) {
+    if (!allowAttempt(key, 10)) throw new Error("Terlalu banyak percobaan. Tunggu 60 detik lalu coba lagi.");
+    throw new Error("Username atau password salah.");
+  }
   if (user.isSuspended) throw new Error("Akun sedang disuspend admin.");
+  attempts.delete(key);
   const database = await db.getDb(); if (database) await database.update((await import("../../drizzle/schema")).users).set({ lastSignedIn: new Date() }).where((await import("drizzle-orm")).eq((await import("../../drizzle/schema")).users.id, user.id));
   return user;
 }
