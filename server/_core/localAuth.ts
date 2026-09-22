@@ -58,8 +58,9 @@ export async function registerLocalUser(input: { username: string; password: str
 }
 
 export async function loginLocalUser(username: string, password: string) {
-  const key = `login:${clean(username)}`;
-  const user = await db.getUserByUsername(clean(username));
+  const identifier = clean(username);
+  const key = `login:${identifier}`;
+  const user = identifier.includes("@") ? await db.getUserByEmail(identifier) : await db.getUserByUsername(identifier);
   if (!user || !verifySecret(password, user.passwordHash)) {
     if (!allowAttempt(key, 10)) throw new Error("Terlalu banyak percobaan. Tunggu 60 detik lalu coba lagi.");
     throw new Error("Username atau password salah.");
