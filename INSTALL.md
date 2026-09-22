@@ -48,7 +48,7 @@ Isi `DATABASE_URL`, `JWT_SECRET`, variabel Manus OAuth, dan kredensial built-in 
 
 ## Fitur yang disiapkan
 
-Dashboard memiliki role **admin**, **penjual**, dan **pembeli**. Pembeli memiliki beranda, saldo, produk saya, transaksi digital, foto profil, Gmail, nomor HP, reset password placeholder, dan copy script setelah pembelian. Penjual dapat memilih script utuh atau produk API dengan script rahasia. Admin dapat mengatur biaya marketplace, moderasi produk, role user, dan suspend user.
+Dashboard memiliki role **admin**, **penjual**, dan **pembeli**. Pembeli memiliki beranda, saldo, produk saya, transaksi digital, foto profil, Gmail, nomor HP, reset password melalui alur pemulihan, dan copy script setelah pembelian. Penjual dapat memilih script utuh atau produk API dengan script rahasia. Admin dapat mengatur biaya marketplace, moderasi produk, role user, dan suspend user.
 
 ## Template script otomatis
 

@@ -8,6 +8,7 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_
 import { TRPCError } from "@trpc/server";
 import JavaScriptObfuscator from "javascript-obfuscator";
 import { clearSession, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, resetWithSecurityQuestion, safeUser, setSession } from "./_core/localAuth";
+import { MIN_PASSWORD_LENGTH } from "@shared/const";
 
 const roleProcedure = (role: "admin" | "seller" | "buyer") => protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== role) throw new TRPCError({ code: "FORBIDDEN", message: `Akses khusus ${role}.` });
@@ -157,7 +158,7 @@ export const appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query(({ ctx }) => safeUser(ctx.user)),
-    login: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(1), expectedRole: z.enum(["admin", "seller"]).optional() })).mutation(async ({ ctx, input }) => {
+    login: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(MIN_PASSWORD_LENGTH), expectedRole: z.enum(["admin", "seller"]).optional() })).mutation(async ({ ctx, input }) => {
       try {
         const user = await loginLocalUser(input.username, input.password);
         if (input.expectedRole && user.role !== input.expectedRole) throw new Error(`Akun ini bukan akun ${input.expectedRole === "admin" ? "admin" : "penjual"}.`);
@@ -167,7 +168,7 @@ export const appRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: error instanceof Error ? error.message : "Login gagal." });
       }
     }),
-    register: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(15), name: z.string().min(2).max(120), email: z.string().email(), securityQuestion: z.string().min(8).max(255), securityAnswer: z.string().min(2).max(255), requestedRole: z.enum(["buyer", "seller"]).default("buyer") })).mutation(async ({ ctx, input }) => {
+    register: publicProcedure.input(z.object({ username: z.string().min(3).max(64), password: z.string().min(MIN_PASSWORD_LENGTH), name: z.string().min(2).max(120), email: z.string().email(), securityQuestion: z.string().min(8).max(255), securityAnswer: z.string().min(2).max(255), requestedRole: z.enum(["buyer", "seller"]).default("buyer") })).mutation(async ({ ctx, input }) => {
       try {
         if ((input.securityQuestion && !input.securityAnswer) || (!input.securityQuestion && input.securityAnswer)) throw new Error("Pertanyaan dan jawaban keamanan harus diisi bersama.");
         const user = await registerLocalUser(input, input.requestedRole);
@@ -183,8 +184,8 @@ export const appRouter = router({
       return { success: true, message: "Jika akun ditemukan, tautan reset akan dikirim ke email terdaftar." };
     }),
     securityQuestion: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320) })).query(async ({ input }) => { const key = input.identifier.trim().toLowerCase(); const user = key.includes("@") ? await getDb().then((db) => db ? db.select({ securityQuestion: users.securityQuestion }).from(users).where(eq(users.email, key)).limit(1) : []) : await getDb().then((db) => db ? db.select({ securityQuestion: users.securityQuestion }).from(users).where(eq(users.username, key)).limit(1) : []); return user[0]?.securityQuestion || null; }),
-    resetPassword: publicProcedure.input(z.object({ token: z.string().min(20), password: z.string().min(6) })).mutation(async ({ input }) => { await resetPassword(input.token, input.password); return { success: true }; }),
-    resetWithSecurityQuestion: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320), answer: z.string().min(2).max(255), password: z.string().min(6) })).mutation(async ({ input }) => { const db = await getDb(); const row = db ? (await db.select().from(settings).limit(1))[0] : undefined; if (row?.resetSecurityEnabled === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Metode pertanyaan keamanan dinonaktifkan admin." }); await resetWithSecurityQuestion(input.identifier, input.answer, input.password); return { success: true }; }),
+    resetPassword: publicProcedure.input(z.object({ token: z.string().min(20), password: z.string().min(MIN_PASSWORD_LENGTH) })).mutation(async ({ input }) => { await resetPassword(input.token, input.password); return { success: true }; }),
+    resetWithSecurityQuestion: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320), answer: z.string().min(2).max(255), password: z.string().min(MIN_PASSWORD_LENGTH) })).mutation(async ({ input }) => { const db = await getDb(); const row = db ? (await db.select().from(settings).limit(1))[0] : undefined; if (row?.resetSecurityEnabled === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Metode pertanyaan keamanan dinonaktifkan admin." }); await resetWithSecurityQuestion(input.identifier, input.answer, input.password); return { success: true }; }),
     logout: publicProcedure.mutation(({ ctx }) => {
       clearSession(ctx.res, ctx.req);
       return { success: true } as const;
